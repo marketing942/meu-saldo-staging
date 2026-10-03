@@ -1,10 +1,9 @@
-import { CircleAlert, CreditCard, Pencil, Undo2 } from 'lucide-react'
+import { CircleAlert, CreditCard, Pencil, TriangleAlert, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 
 import { CampoConta } from '@/components/formularios/CamposComuns'
 import { Alerta } from '@/components/ui/Alerta'
-import { BarraProgresso } from '@/components/ui/BarraProgresso'
 import { Botao } from '@/components/ui/Botao'
 import { Card, TituloCard } from '@/components/ui/Card'
 import { ConfirmarAcao } from '@/components/ui/ConfirmarAcao'
@@ -21,11 +20,14 @@ import {
   usePagarFatura,
 } from '@/lib/dados/cartoes'
 import { contaPadrao, useContas } from '@/lib/dados/contas'
-import { formatarData, formatarNomeMes } from '@/lib/datas'
+import { formatarData, mesAnoPorExtenso } from '@/lib/datas'
 import { mensagemDeErro } from '@/lib/erros'
 import { useMes } from '@/lib/mes'
+import { LIMITE_ALERTA_PERCENTUAL } from '@/lib/regras/cartao'
 import { useFormatarValor } from '@/lib/valores'
 import { useAvisos } from '@/stores/avisos'
+
+import { ResumoLimite } from './ResumoLimite'
 
 const ROTULO_STATUS = { aberta: 'Aberta', fechada: 'Fechada', paga: 'Paga' } as const
 
@@ -68,7 +70,7 @@ export default function Cartao() {
             <span aria-hidden className="size-4 rounded-full" style={{ backgroundColor: f.cor }} />
             {f.nome}
           </h1>
-          <p className="text-sm text-secundario">Fatura que fecha em {formatarNomeMes(mes)}</p>
+          <p className="text-sm text-secundario">Fatura que fecha em {mesAnoPorExtenso(mes)}</p>
         </div>
         <LinkBotao to="/configuracoes/cartoes" variante="texto" icone={Pencil} className="text-sm">
           Editar
@@ -106,37 +108,49 @@ export default function Cartao() {
               {f.status !== 'paga' && f.dias_para_vencer >= 0 && (
                 <span className="text-secundario">
                   {' '}
-                  ({f.dias_para_vencer === 0 ? 'hoje' : `em ${f.dias_para_vencer} d`})
+                  (
+                  {f.dias_para_vencer === 0
+                    ? 'hoje'
+                    : `em ${f.dias_para_vencer} ${f.dias_para_vencer === 1 ? 'dia' : 'dias'}`}
+                  )
                 </span>
               )}
             </dd>
           </div>
           {f.dividas_centavos > 0 && (
             <div className="col-span-2 text-secundario">
-              Inclui {formatar(f.dividas_centavos)} de dívidas pagas no cartão.
+              Inclui {formatar(f.dividas_centavos)} de contas a pagar pagas no cartão.
             </div>
           )}
         </dl>
-        <div className="flex flex-col gap-1.5">
-          <BarraProgresso
-            rotulo="Limite usado"
-            percentual={f.limite_percentual}
-            cor={f.limite_percentual >= 90 ? 'bg-desnecessario' : 'bg-destaque'}
-          />
-          <p className="text-sm text-secundario">
-            Limite usado {Math.round(f.limite_percentual)}% · disponível{' '}
-            <span className="valor font-medium text-texto">
-              {formatar(f.limite_disponivel_centavos)}
-            </span>{' '}
-            de {formatar(f.limite_centavos)}
-          </p>
-        </div>
         <Pagamento
           cartaoId={f.cartao_id}
           status={f.status}
           total={f.total_centavos}
           pagoEm={f.pago_em}
           contaPagamentoId={f.conta_pagamento_id}
+        />
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <TituloCard>Limite do cartão</TituloCard>
+        <ResumoLimite
+          nomeCartao={f.nome}
+          limite={{
+            limiteCentavos: f.limite_centavos,
+            usadoCentavos: f.limite_usado_centavos,
+            disponivelCentavos: f.limite_disponivel_centavos,
+            percentual: f.limite_percentual,
+          }}
+        />
+        <p className="text-sm text-secundario">
+          Cada compra ocupa o limite até a fatura em que ela entrou ser paga. Compras parceladas
+          ocupam todas as parcelas que faltam pagar.
+        </p>
+        <AlertaLimite
+          nome={f.nome}
+          percentual={f.limite_percentual}
+          disponivel={f.limite_disponivel_centavos}
         />
       </Card>
 
@@ -159,7 +173,7 @@ export default function Cartao() {
                     <p className="truncate font-medium">{l.descricao}</p>
                     <p className="text-sm text-secundario">
                       {formatarData(l.data)}
-                      {l.tipo === 'divida' && ' · dívida'}
+                      {l.tipo === 'divida' && ' · conta a pagar'}
                       {l.total_parcelas > 1 && ` · parcela ${l.parcela_atual}/${l.total_parcelas}`}
                     </p>
                   </div>
@@ -211,7 +225,7 @@ function Pagamento({
           rotulo="Desfazer pagamento"
           icone={Undo2}
           variante="secundario"
-          pergunta="Desfazer o pagamento desta fatura? O valor volta para a conta."
+          pergunta="Desfazer o pagamento desta fatura? O valor volta para a carteira e volta a ocupar o limite."
           rotuloConfirmar="Desfazer"
           carregando={desfazer.isPending}
           aoConfirmar={() =>
@@ -234,7 +248,7 @@ function Pagamento({
         </Alerta>
       )}
       <CampoConta
-        rotulo="Pagar com a conta"
+        rotulo="Pagar com a carteira"
         contas={contas.data}
         valor={contaId}
         aoMudar={setContaEscolhida}
@@ -244,12 +258,38 @@ function Pagamento({
         carregando={pagar.isPending}
         onClick={() =>
           quandoTerminar(pagar.mutateAsync({ cartaoId, mes, contaId }), () =>
-            mostrarAviso('Fatura marcada como paga.'),
+            mostrarAviso('Fatura marcada como paga. O valor voltou para o limite.'),
           )
         }
       >
         Marcar fatura como paga
       </Botao>
     </div>
+  )
+}
+
+/** Aviso de limite acima de 80% (e estourado a partir de 100%). */
+function AlertaLimite({
+  nome,
+  percentual,
+  disponivel,
+}: {
+  nome: string
+  percentual: number
+  disponivel: number
+}) {
+  const formatar = useFormatarValor()
+  if (percentual < LIMITE_ALERTA_PERCENTUAL) return null
+  const estourou = disponivel < 0
+  return (
+    <Alerta
+      tom={estourou ? 'desnecessario' : 'alerta'}
+      icone={estourou ? CircleAlert : TriangleAlert}
+      titulo={estourou ? 'Limite estourado' : `Limite acima de ${LIMITE_ALERTA_PERCENTUAL}%`}
+    >
+      {estourou
+        ? `As compras no ${nome} passam do limite em ${formatar(-disponivel)}.`
+        : `Você já usou ${Math.round(percentual)}% do limite do ${nome}. Disponível: ${formatar(disponivel)}.`}
+    </Alerta>
   )
 }

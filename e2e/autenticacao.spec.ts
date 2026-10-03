@@ -1,7 +1,7 @@
 import { digitarValor, entrar, expect, test } from './fixtures'
 
 test('sem sessão, a área interna manda para /entrar', async ({ page }) => {
-  for (const rota of ['/', '/gastos', '/dividas/nova', '/configuracoes']) {
+  for (const rota of ['/', '/gastos', '/contas-a-pagar/nova', '/configuracoes']) {
     await page.goto(rota)
     await expect(page).toHaveURL(/\/entrar$/)
   }
@@ -30,8 +30,9 @@ test('cadastro com nome e termos leva ao primeiro acesso e depois ao Início', a
   await expect(page.getByLabel('Seu nome')).toHaveValue('Ana Souza')
   await digitarValor(page, /Saldo inicial/, '150000')
   await page.getByRole('button', { name: 'Continuar' }).click()
-  await digitarValor(page, /desnecessários/, '50000')
-  await digitarValor(page, /Meta de receita/, '300000')
+  await expect(page.getByRole('heading', { name: 'Previsão de desnecessários' })).toBeVisible()
+  await digitarValor(page, 'Previsão mensal de desnecessários (R$)', '50000')
+  await expect(page.getByLabel(/meta de receita/i)).toHaveCount(0)
   await page.getByRole('button', { name: 'Concluir' }).click()
 
   await expect(page).toHaveURL(/\/$/)
@@ -47,7 +48,6 @@ test('cadastro com nome e termos leva ao primeiro acesso e depois ao Início', a
     meta_desnecessario_centavos: 50000,
   })
   expect(banco.linhas('contas', uid)[0]).toMatchObject({ saldo_inicial_centavos: 150000 })
-  expect(banco.linhas('metas_receita', uid)[0]).toMatchObject({ valor_meta_centavos: 300000 })
 })
 
 test('pular o primeiro acesso também libera o app', async ({ page, banco }) => {
@@ -101,6 +101,8 @@ test('senha errada mostra mensagem; a certa entra e Sair volta para /entrar', as
 test('esqueci a senha envia o link e os termos abrem sem login', async ({ page, banco }) => {
   await page.goto('/entrar')
   await page.getByRole('link', { name: 'Esqueci minha senha' }).click()
+  // Espera a tela nova: a de Entrar também tem um campo "E-mail".
+  await expect(page.getByRole('heading', { name: 'Esqueci minha senha' })).toBeVisible()
   await page.getByLabel('E-mail').fill('ana@exemplo.com')
   await page.getByRole('button', { name: 'Enviar link de recuperação' }).click()
   await expect(page.getByText('Link de recuperação enviado')).toBeVisible()

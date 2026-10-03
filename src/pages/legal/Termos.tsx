@@ -11,9 +11,9 @@ export default function Termos() {
       </p>
       <h2>1. O que o app faz</h2>
       <p>
-        O {MARCA.nome} ajuda você a registrar gastos, receitas, cartões, dívidas, metas e projetos,
-        e calcula totais, saldos e alertas a partir do que você lança. O app não movimenta dinheiro,
-        não se conecta ao seu banco e não faz pagamentos.
+        O {MARCA.nome} ajuda você a registrar gastos, receitas, cartões, contas a pagar, a previsão
+        de desnecessários e projetos, e calcula totais, saldos e alertas a partir do que você lança.
+        O app não movimenta dinheiro, não se conecta ao seu banco e não faz pagamentos.
       </p>
       <h2>2. Sua conta</h2>
       <ul>

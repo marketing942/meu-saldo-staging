@@ -33,6 +33,8 @@
   --necessario: #34795b;
   --desnecessario: #be3f56;
   --alerta: #c98f2e;
+  /* Laranja: alerta forte (90% da previsão de desnecessários). */
+  --forte: #d2642a;
   /* Texto sobre o botão principal (cor de destaque). */
   --sobre-destaque: #ffffff;
 }
@@ -50,6 +52,7 @@
     --necessario: #6db896;
     --desnecessario: #e08a9a;
     --alerta: #ddb25a;
+    --forte: #ee9a62;
     --sobre-destaque: #111418;
   }
 }
@@ -66,6 +69,7 @@
   --necessario: #6db896;
   --desnecessario: #e08a9a;
   --alerta: #ddb25a;
+  --forte: #ee9a62;
   --sobre-destaque: #111418;
 }
 
@@ -81,6 +85,7 @@
   --color-necessario: var(--necessario);
   --color-desnecessario: var(--desnecessario);
   --color-alerta: var(--alerta);
+  --color-forte: var(--forte);
   --color-sobre-destaque: var(--sobre-destaque);
 }
 

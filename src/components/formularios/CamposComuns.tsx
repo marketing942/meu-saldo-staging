@@ -23,7 +23,7 @@ export function GrupoEscolha({
 }
 
 /**
- * Conta de onde sai (ou para onde vai) o dinheiro. Com uma conta só (a Carteira
+ * Carteira de onde sai (ou para onde vai) o dinheiro. Com uma carteira só (a Carteira
  * criada no cadastro), não pede escolha: só informa qual será usada.
  */
 export function CampoConta({

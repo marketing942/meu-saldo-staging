@@ -1,4 +1,4 @@
-import { CircleAlert, Info, Receipt, Sparkles, Trash2 } from 'lucide-react'
+import { CircleAlert, Info, Receipt, Sparkles, Trash2, TriangleAlert } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -15,7 +15,7 @@ import { EstadoVazio } from '@/components/ui/EstadoVazio'
 import { LinkBotao } from '@/components/ui/LinkBotao'
 import { Pilula } from '@/components/ui/Pilula'
 import { Selecao } from '@/components/ui/Selecao'
-import { type Cartao, useCartoes } from '@/lib/dados/cartoes'
+import { type Cartao, useCartoes, useLimiteCartao } from '@/lib/dados/cartoes'
 import { type Categoria, useCategorias } from '@/lib/dados/categorias'
 import { contaPadrao, useContas } from '@/lib/dados/contas'
 import {
@@ -28,14 +28,16 @@ import {
   useSugestaoCategoria,
 } from '@/lib/dados/gastos'
 import { desfazerCom } from '@/lib/dados/desfazer'
-import { dataValida, formatarMesAno, hoje } from '@/lib/datas'
+import { dataValida, hoje, mesAnoPorExtenso } from '@/lib/datas'
 import { formatarCentavos } from '@/lib/dinheiro'
 import { mensagemDeErro } from '@/lib/erros'
 import { useVoltar } from '@/lib/navegacao'
 import { useUsuario } from '@/lib/sessao'
-import { PARCELAS_MAXIMO, gerarParcelas, mesFatura } from '@/lib/regras/cartao'
+import { PARCELAS_MAXIMO, excessoNoLimite, gerarParcelas, mesFatura } from '@/lib/regras/cartao'
 import type { Enums } from '@/lib/supabase'
 import { useAtrasado } from '@/lib/useAtrasado'
+import { useFormatarValor } from '@/lib/valores'
+import { ResumoLimite } from '@/pages/cartoes/ResumoLimite'
 import { useAvisos } from '@/stores/avisos'
 
 import { ROTULO_TIPO } from './rotulos'
@@ -76,8 +78,9 @@ export default function FormGasto() {
           acao={<LinkBotao to="/gastos">Voltar para Gastos</LinkBotao>}
         />
       ) : !contas.data || contas.data.length === 0 ? (
-        <Alerta tom="alerta" icone={CircleAlert} titulo="Nenhuma conta encontrada">
-          Cadastre uma conta em <Link to="/configuracoes/contas">Configurações › Contas</Link>.
+        <Alerta tom="alerta" icone={CircleAlert} titulo="Nenhuma carteira encontrada">
+          Cadastre uma carteira em <Link to="/configuracoes/contas">Configurações › Carteiras</Link>
+          .
         </Alerta>
       ) : (
         <Formulario
@@ -97,6 +100,7 @@ interface Erros {
   data?: string
   tipo?: string
   cartao?: string
+  limite?: string
 }
 
 function Formulario({
@@ -132,7 +136,9 @@ function Formulario({
     original ? original.categoria_id : undefined,
   )
   const [tipoEscolhido, setTipoEscolhido] = useState<Tipo | undefined>(original?.tipo)
+  const [acimaDoLimiteConfirmado, setAcimaDoLimiteConfirmado] = useState(false)
   const [erros, setErros] = useState<Erros>({})
+  const formatar = useFormatarValor()
 
   const sugestao = useSugestaoCategoria(useAtrasado(original ? '' : descricao))
   const sugestaoValida =
@@ -150,6 +156,19 @@ function Formulario({
   const totalParcelas = origem === 'cartao' && !original ? parcelas : 1
   const travado = parcelado // compra parcelada: só descrição, categoria e tipo mudam
 
+  // Limite do cartão escolhido. A compra (à vista ou o total parcelado) ocupa o
+  // limite inteiro; na edição, o valor antigo no mesmo cartão volta antes de comparar.
+  const limite = useLimiteCartao(origem === 'cartao' && cartao ? cartao.id : undefined)
+  const valorAnteriorNoCartao =
+    original?.origem === 'cartao' && original.cartao_id === cartao?.id ? original.valor_centavos : 0
+  const disponivelParaCompra = limite.data
+    ? limite.data.disponivel_centavos + valorAnteriorNoCartao
+    : null
+  const excessoLimite =
+    origem === 'cartao' && limite.data && !travado && centavos > 0
+      ? excessoNoLimite(limite.data.disponivel_centavos, centavos, valorAnteriorNoCartao)
+      : 0
+
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
     const texto = descricao.trim()
@@ -164,6 +183,10 @@ function Formulario({
       data: dataValida(data) ? undefined : 'Escolha uma data válida.',
       tipo: tipo ? undefined : 'Escolha se foi necessário ou desnecessário.',
       cartao: origem === 'cartao' && !cartao ? 'Escolha o cartão.' : undefined,
+      limite:
+        excessoLimite > 0 && !acimaDoLimiteConfirmado
+          ? 'Confirme que quer salvar a compra acima do limite.'
+          : undefined,
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean) || !tipo) return
@@ -321,14 +344,62 @@ function Formulario({
               {cartao && dataValida(data) && (
                 <p className="text-sm text-secundario">
                   {resumoParcelas(centavos, data, totalParcelas)}Entra na fatura que fecha em{' '}
-                  {formatarMesAno(mesFatura(data, cartao.dia_fechamento))}.
+                  {mesAnoPorExtenso(mesFatura(data, cartao.dia_fechamento))}.
                 </p>
+              )}
+              {cartao && limite.data && (
+                <div className="flex flex-col gap-2 rounded-campo border border-borda p-3">
+                  <p className="text-sm font-medium">
+                    Disponível:{' '}
+                    <span
+                      className={
+                        limite.data.disponivel_centavos < 0 ? 'valor text-desnecessario' : 'valor'
+                      }
+                    >
+                      {formatar(limite.data.disponivel_centavos)}
+                    </span>
+                  </p>
+                  <ResumoLimite
+                    nomeCartao={cartao.nome}
+                    compacto
+                    limite={{
+                      limiteCentavos: limite.data.limite_centavos,
+                      usadoCentavos: limite.data.usado_centavos,
+                      disponivelCentavos: limite.data.disponivel_centavos,
+                      percentual: limite.data.percentual,
+                    }}
+                  />
+                </div>
+              )}
+              {excessoLimite > 0 && disponivelParaCompra !== null && (
+                <Alerta
+                  tom="alerta"
+                  icone={TriangleAlert}
+                  anunciar
+                  titulo={`Esta compra passa do limite disponível (${formatar(disponivelParaCompra)})`}
+                >
+                  <p>
+                    Ela passa {formatar(excessoLimite)} do limite. Você pode salvar mesmo assim.
+                  </p>
+                  <label className="mt-2 flex items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={acimaDoLimiteConfirmado}
+                      onChange={(e) => setAcimaDoLimiteConfirmado(e.target.checked)}
+                      className="size-5 accent-[var(--destaque)]"
+                    />
+                    Salvar mesmo assim
+                  </label>
+                  {erros.limite && !acimaDoLimiteConfirmado && (
+                    <p className="mt-1 text-desnecessario">{erros.limite}</p>
+                  )}
+                </Alerta>
               )}
             </div>
           )
         ) : (
           <CampoConta
-            rotulo="Sai da conta"
+            rotulo="Sai da carteira"
             contas={contas}
             valor={contaId}
             aoMudar={setContaEscolhida}

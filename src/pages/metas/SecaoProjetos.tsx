@@ -14,7 +14,8 @@ import { useFormatarValor } from '@/lib/valores'
 
 import { FormProjeto } from './FormProjeto'
 
-export function AbaProjetos() {
+/** Seção "Projetos" da tela Metas. */
+export function SecaoProjetos() {
   const projetos = useProjetos()
   const formatar = useFormatarValor()
   const navegar = useNavigate()
@@ -24,11 +25,16 @@ export function AbaProjetos() {
   const arquivados = projetos.data?.filter((p) => p.arquivado) ?? []
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-secundario">
-        Eventos e objetivos com orçamento próprio. Ficam fora dos totais do mês e da meta de
-        desnecessários.
-      </p>
+    <section aria-labelledby="titulo-projetos" className="flex flex-col gap-4">
+      <div>
+        <h2 id="titulo-projetos" className="text-xl font-semibold">
+          Projetos
+        </h2>
+        <p className="text-sm text-secundario">
+          Eventos e objetivos com orçamento próprio. Ficam fora dos totais do mês e da previsão de
+          desnecessários.
+        </p>
+      </div>
       {criando ? (
         <Card>
           <FormProjeto
@@ -67,7 +73,7 @@ export function AbaProjetos() {
           .filter((grupo) => grupo.lista.length > 0)
           .map((grupo) => (
             <section key={grupo.titulo} aria-label={grupo.titulo} className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium text-secundario">{grupo.titulo}</h2>
+              <h3 className="text-sm font-medium text-secundario">{grupo.titulo}</h3>
               <ul className="flex flex-col gap-3">
                 {grupo.lista.map((p) => {
                   const prog = progressoProjeto(p.total_centavos, p.orcamento_centavos)
@@ -111,6 +117,6 @@ export function AbaProjetos() {
             </section>
           ))
       )}
-    </div>
+    </section>
   )
 }

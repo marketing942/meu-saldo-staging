@@ -5,7 +5,7 @@ import { Link, useLocation } from 'react-router'
 import { Icone } from '@/components/ui/Icone'
 
 /** Telas principais onde o "+ Novo" aparece (nos formulários ele some). */
-const TELAS_COM_BOTAO = ['/', '/gastos', '/dividas', '/metas', '/receitas']
+const TELAS_COM_BOTAO = ['/', '/gastos', '/contas-a-pagar', '/metas']
 
 export function BotaoNovo() {
   const { pathname } = useLocation()

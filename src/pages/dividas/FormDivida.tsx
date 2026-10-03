@@ -1,4 +1,4 @@
-import { CircleAlert, Info, Landmark, Trash2 } from 'lucide-react'
+import { CalendarClock, CircleAlert, Info, Trash2 } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
 
@@ -35,7 +35,7 @@ import { useUsuario } from '@/lib/sessao'
 import type { Enums } from '@/lib/supabase'
 import { useAvisos } from '@/stores/avisos'
 
-/** /dividas/nova e /dividas/:dividaId (editar). */
+/** Conta a pagar: /contas-a-pagar/nova e /contas-a-pagar/:dividaId (editar). */
 export default function FormDivida() {
   const { dividaId } = useParams()
   const contas = useContas()
@@ -46,7 +46,9 @@ export default function FormDivida() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{editando ? 'Editar dívida' : 'Nova dívida'}</h1>
+      <h1 className="text-2xl font-semibold">
+        {editando ? 'Editar conta a pagar' : 'Nova conta a pagar'}
+      </h1>
       {consultas.some((c) => c.isPending) ? (
         <Carregando rotulo="Carregando formulário">
           <Esqueleto className="h-[30rem] w-full rounded-card" />
@@ -58,10 +60,10 @@ export default function FormDivida() {
         />
       ) : editando && !divida.data ? (
         <EstadoVazio
-          icone={Landmark}
-          titulo="Dívida não encontrada"
+          icone={CalendarClock}
+          titulo="Conta a pagar não encontrada"
           descricao="Ela pode ter sido excluída."
-          acao={<LinkBotao to="/dividas">Ver dívidas</LinkBotao>}
+          acao={<LinkBotao to="/contas-a-pagar">Ver contas a pagar</LinkBotao>}
         />
       ) : (
         <Formulario
@@ -92,7 +94,7 @@ function Formulario({
   contas: { conta_id: string; nome: string }[]
   cartoes: Cartao[]
 }) {
-  const voltar = useVoltar('/dividas')
+  const voltar = useVoltar('/contas-a-pagar')
   const { id: uid } = useUsuario()
   const mostrarAviso = useAvisos((a) => a.mostrar)
   const salvarDivida = useSalvarDivida()
@@ -124,7 +126,7 @@ function Formulario({
     evento.preventDefault()
     const diaNum = lerDia(dia)
     const novosErros: Erros = {
-      nome: nome.trim() ? undefined : 'Dê um nome à dívida.',
+      nome: nome.trim() ? undefined : 'Dê um nome à conta a pagar.',
       valor: valor > 0 ? undefined : 'Informe o valor da parcela.',
       dia: diaNum ? undefined : 'Dia de 1 a 31.',
       total:
@@ -137,7 +139,7 @@ function Formulario({
           : 'Precisa ser menor que o total.',
       conta:
         forma === 'conta' && !contaId
-          ? 'Escolha a conta.'
+          ? 'Escolha a carteira.'
           : forma === 'cartao' && !cartaoId
             ? 'Escolha o cartão.'
             : undefined,
@@ -159,7 +161,7 @@ function Formulario({
         cartao_id: forma === 'cartao' ? cartaoId : null,
         ativa,
       })
-      mostrarAviso(original ? 'Dívida atualizada.' : 'Dívida salva.')
+      mostrarAviso(original ? 'Conta a pagar atualizada.' : 'Conta a pagar salva.')
       voltar()
     } catch {
       // A mensagem aparece pelo estado de erro da mutation.
@@ -171,7 +173,7 @@ function Formulario({
     try {
       await excluir.mutateAsync(original.id)
       voltar()
-      mostrarAviso('Dívida excluída de todos os meses.', {
+      mostrarAviso('Conta excluída de todos os meses.', {
         rotulo: 'Desfazer',
         executar: desfazerCom(() => restaurarDivida(uid, original.id)),
       })
@@ -207,7 +209,7 @@ function Formulario({
           erro={erros.nome}
         />
         <Selecao
-          rotulo="Categoria da dívida"
+          rotulo="Categoria da conta a pagar"
           value={tipo}
           onChange={(e) => setTipo(e.target.value as Enums['tipo_divida'])}
         >
@@ -273,7 +275,7 @@ function Formulario({
 
         <GrupoEscolha legenda="Como você paga?">
           <Pilula ativa={forma === 'conta'} onClick={() => setForma('conta')}>
-            Conta
+            Carteira
           </Pilula>
           <Pilula
             ativa={forma === 'cartao'}
@@ -287,7 +289,7 @@ function Formulario({
         {forma === 'conta' ? (
           contas.length > 0 && (
             <CampoConta
-              rotulo="Sai da conta"
+              rotulo="Sai da carteira"
               contas={contas}
               valor={contaId}
               aoMudar={setContaEscolhida}
@@ -313,7 +315,7 @@ function Formulario({
 
         {original && (
           <Interruptor
-            rotulo="Dívida ativa"
+            rotulo="Conta ativa"
             descricao="Desligue para encerrar: ela some dos próximos meses e o histórico fica."
             ligado={ativa}
             aoMudar={setAtiva}
@@ -322,16 +324,16 @@ function Formulario({
 
         <div className="mt-2 flex flex-col gap-2">
           <Botao type="submit" larguraTotal carregando={salvarDivida.isPending}>
-            {original ? 'Salvar alterações' : 'Salvar dívida'}
+            {original ? 'Salvar alterações' : 'Salvar conta a pagar'}
           </Botao>
           <Botao variante="texto" onClick={voltar}>
             Cancelar
           </Botao>
           {original && (
             <ConfirmarAcao
-              rotulo="Excluir dívida"
+              rotulo="Excluir conta a pagar"
               icone={Trash2}
-              pergunta="Excluir esta dívida de todos os meses, inclusive o histórico de pagamentos?"
+              pergunta="Excluir esta conta a pagar de todos os meses, inclusive o histórico de pagamentos?"
               rotuloConfirmar="Excluir"
               carregando={excluir.isPending}
               aoConfirmar={() => void remover()}

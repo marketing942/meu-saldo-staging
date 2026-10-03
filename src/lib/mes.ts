@@ -25,5 +25,7 @@ export function useComMes() {
   const [parametros] = useSearchParams()
   const mes = parametros.get('mes')
   return (caminho: string) =>
-    mes && mesValido(mes) ? `${caminho}?mes=${encodeURIComponent(mes)}` : caminho
+    mes && mesValido(mes)
+      ? `${caminho}${caminho.includes('?') ? '&' : '?'}mes=${encodeURIComponent(mes)}`
+      : caminho
 }

@@ -5,6 +5,7 @@ import {
   Eye,
   EyeOff,
   Receipt,
+  TrendingUp,
   TriangleAlert,
 } from 'lucide-react'
 import { Link } from 'react-router'
@@ -18,17 +19,23 @@ import { EstadoErro } from '@/components/ui/EstadoErro'
 import { EstadoVazio } from '@/components/ui/EstadoVazio'
 import { Inicial } from '@/components/ui/Inicial'
 import { LinkBotao } from '@/components/ui/LinkBotao'
+import { corDaBarraDoNivel, tomDoNivel } from '@/components/ui/estilosNivel'
 import { cn } from '@/lib/cn'
 import { useFaturasDoMes } from '@/lib/dados/cartoes'
 import { useContas } from '@/lib/dados/contas'
 import { useDividasDoMes } from '@/lib/dados/dividas'
 import { primeiroNome, useAtualizarPerfil, usePerfil } from '@/lib/dados/perfil'
 import { type ResumoMes, useResumoMes } from '@/lib/dados/resumo'
-import { diaDe, formatarNomeMes } from '@/lib/datas'
+import { diaDe, mesAdd, nomeMesMinusculo } from '@/lib/datas'
 import { useComMes, useMes } from '@/lib/mes'
+import { LIMITE_ALERTA_PERCENTUAL } from '@/lib/regras/cartao'
 import { nivelDoPercentual } from '@/lib/regras/resumo'
 import { useFormatarValor } from '@/lib/valores'
+import { ResumoLimite } from '@/pages/cartoes/ResumoLimite'
 import { useUI } from '@/stores/ui'
+
+/** Contas a pagar pendentes que vencem em até 3 dias geram alerta. */
+const DIAS_AVISO_VENCIMENTO = 3
 
 export default function Inicio() {
   const mes = useMes()
@@ -76,10 +83,11 @@ export default function Inicio() {
                 {formatar(resumo.data.sobra_mes_centavos)}
               </span>
             </p>
-            <SaldoPorConta />
+            <SaldoPorCarteira />
           </Card>
 
           <AlertaDesnecessarios resumo={resumo.data} />
+          <AlertaMesAnterior resumo={resumo.data} />
           <Alertas />
           <Lembrete resumo={resumo.data} lembrar={perfil.data?.lembrete_diario ?? true} />
 
@@ -88,7 +96,7 @@ export default function Inicio() {
           resumo.data.dividas_total_centavos === 0 ? (
             <EstadoVazio
               icone={Receipt}
-              titulo={`Nada lançado em ${formatarNomeMes(mes)}`}
+              titulo={`Nada lançado em ${nomeMesMinusculo(mes)}`}
               descricao="Lance uma receita ou um gasto para ver o resumo do mês aqui."
               acao={<LinkBotao to="/gastos/novo">Lançar primeiro gasto</LinkBotao>}
             />
@@ -103,7 +111,7 @@ export default function Inicio() {
                 />
                 <CardTotal
                   titulo="Receitas do mês"
-                  para="/receitas"
+                  para="/gastos?aba=receitas"
                   valor={resumo.data.receitas_mes_centavos}
                 />
               </div>
@@ -112,7 +120,9 @@ export default function Inicio() {
                   <div>
                     <TituloCard>Pode gastar por dia</TituloCard>
                     <p className="text-xs text-secundario">
-                      {resumo.data.dias_restantes} dias até o fim do mês, contando hoje
+                      {resumo.data.dias_restantes}{' '}
+                      {resumo.data.dias_restantes === 1 ? 'dia' : 'dias'} até o fim do mês, contando
+                      hoje
                     </p>
                   </div>
                   <p
@@ -130,7 +140,7 @@ export default function Inicio() {
             </>
           )}
 
-          <CardDividas resumo={resumo.data} />
+          <CardContasAPagar resumo={resumo.data} />
           <Cartoes />
           <ProximosVencimentos />
         </>
@@ -172,7 +182,8 @@ function BotaoOcultarValores() {
   )
 }
 
-function SaldoPorConta() {
+/** Saldo de cada carteira (só aparece com duas ou mais). */
+function SaldoPorCarteira() {
   const contas = useContas()
   const formatar = useFormatarValor()
   if (!contas.data || contas.data.length < 2) return null
@@ -188,39 +199,60 @@ function SaldoPorConta() {
   )
 }
 
+/** Previsão de desnecessários: 70% (amarelo), 90% (laranja), 100% (vermelho) e ritmo. */
 function AlertaDesnecessarios({ resumo }: { resumo: ResumoMes }) {
   const formatar = useFormatarValor()
-  const meta = resumo.meta_desnecessario_centavos
+  const previsao = resumo.meta_desnecessario_centavos
   const pct = resumo.desnecessario_percentual
   const nivel = nivelDoPercentual(pct)
-  if (meta === null || pct === null || nivel === 'sem-meta') return null
+  if (previsao === null || pct === null || nivel === 'sem-meta') return null
 
   const dias = resumo.desnecessario_dias_para_estourar
+  const emDias = dias === null ? '' : `~${dias} ${dias === 1 ? 'dia' : 'dias'}`
   if (nivel === 'ok') {
     if (dias === null) return null
     return (
-      <Alerta tom="alerta" icone={TriangleAlert} titulo="Ritmo acima da meta">
-        No ritmo atual, os gastos desnecessários passam da meta de {formatar(meta)} em ~{dias}{' '}
-        {dias === 1 ? 'dia' : 'dias'}.
+      <Alerta tom="alerta" icone={TriangleAlert} titulo="Ritmo acima da previsão">
+        No ritmo atual, você passa da previsão de desnecessários ({formatar(previsao)}) em {emDias}.
       </Alerta>
     )
   }
   const estourou = nivel === 'estourou'
   return (
     <Alerta
-      tom={estourou ? 'desnecessario' : 'alerta'}
+      tom={tomDoNivel(nivel)}
       icone={estourou ? CircleAlert : TriangleAlert}
-      titulo={estourou ? 'Você ultrapassou sua meta' : 'Atenção aos gastos desnecessários'}
+      titulo={
+        estourou
+          ? `Você ultrapassou sua previsão em ${formatar(resumo.desnecessario_centavos - previsao)}`
+          : 'Atenção aos gastos desnecessários'
+      }
     >
       {estourou
-        ? `Os desnecessários somam ${formatar(resumo.desnecessario_centavos)}, ${formatar(resumo.desnecessario_centavos - meta)} acima da meta de ${formatar(meta)}.`
-        : `Você já usou ${Math.round(pct)}% da meta de ${formatar(meta)}.`}
-      {!estourou && dias !== null && ` No ritmo atual, passa da meta em ~${dias} dias.`}
+        ? `Os desnecessários somam ${formatar(resumo.desnecessario_centavos)}, e a previsão era de ${formatar(previsao)}.`
+        : `Você já usou ${Math.round(pct)}% da sua previsão de desnecessários (${formatar(previsao)}).`}
+      {!estourou && dias !== null && ` No ritmo atual, você passa da previsão em ${emDias}.`}
     </Alerta>
   )
 }
 
-/** Dívidas atrasadas e faturas fechadas perto do vencimento. */
+/** Desnecessários do mês acima do total do mês anterior. */
+function AlertaMesAnterior({ resumo }: { resumo: ResumoMes }) {
+  const formatar = useFormatarValor()
+  const mesAnterior = mesAdd(resumo.mes_ref, -1)
+  const anterior = useResumoMes(mesAnterior)
+  const gastoAnterior = anterior.data?.desnecessario_centavos ?? 0
+  if (gastoAnterior <= 0 || resumo.desnecessario_centavos <= gastoAnterior) return null
+  return (
+    <Alerta tom="alerta" icone={TrendingUp} titulo="Desnecessários acima do mês anterior">
+      {resumo.situacao === 'atual' ? 'Este mês você já gastou ' : 'Neste mês você gastou '}
+      {formatar(resumo.desnecessario_centavos)} com desnecessários, contra {formatar(gastoAnterior)}{' '}
+      em {nomeMesMinusculo(mesAnterior)}.
+    </Alerta>
+  )
+}
+
+/** Contas a pagar atrasadas ou perto do vencimento, faturas a vencer e limite dos cartões. */
 function Alertas() {
   const mes = useMes()
   const comMes = useComMes()
@@ -228,8 +260,20 @@ function Alertas() {
   const dividas = useDividasDoMes(mes)
   const faturas = useFaturasDoMes(mes)
 
+  const linkContas = (
+    <Link to={comMes('/contas-a-pagar')} className="text-sm font-medium text-destaque underline">
+      Ver contas a pagar
+    </Link>
+  )
   const atrasadas = dividas.data?.filter((d) => d.status === 'atrasada') ?? []
-  const vencendo =
+  const proximas =
+    dividas.data?.filter(
+      (d) =>
+        d.status === 'pendente' &&
+        d.dias_para_vencer >= 0 &&
+        d.dias_para_vencer <= DIAS_AVISO_VENCIMENTO,
+    ) ?? []
+  const faturasVencendo =
     faturas.data?.filter(
       (f) =>
         f.status === 'fechada' &&
@@ -237,6 +281,8 @@ function Alertas() {
         f.dias_para_vencer >= 0 &&
         f.dias_para_vencer <= 5,
     ) ?? []
+  const limitesAltos =
+    faturas.data?.filter((f) => f.limite_percentual >= LIMITE_ALERTA_PERCENTUAL) ?? []
 
   return (
     <>
@@ -245,13 +291,9 @@ function Alertas() {
           tom="desnecessario"
           icone={CircleAlert}
           titulo={
-            atrasadas.length === 1 ? '1 dívida atrasada' : `${atrasadas.length} dívidas atrasadas`
+            atrasadas.length === 1 ? 'Conta atrasada' : `${atrasadas.length} contas atrasadas`
           }
-          acao={
-            <Link to={comMes('/dividas')} className="text-sm font-medium text-destaque underline">
-              Ver dívidas
-            </Link>
-          }
+          acao={linkContas}
         >
           {atrasadas
             .slice(0, 3)
@@ -259,9 +301,25 @@ function Alertas() {
             .join(', ')}
         </Alerta>
       )}
-      {vencendo.map((f) => (
+      {proximas.map((d) => (
         <Alerta
-          key={f.cartao_id}
+          key={d.divida_id}
+          tom="alerta"
+          icone={CalendarClock}
+          titulo={
+            d.dias_para_vencer === 0
+              ? 'Conta a pagar vence hoje'
+              : `Conta a pagar vence em ${d.dias_para_vencer} ${d.dias_para_vencer === 1 ? 'dia' : 'dias'}`
+          }
+          acao={linkContas}
+        >
+          {d.nome}: {formatar(d.valor_centavos)}
+          {d.forma_pagamento === 'cartao' ? ', no cartão.' : '.'}
+        </Alerta>
+      ))}
+      {faturasVencendo.map((f) => (
+        <Alerta
+          key={`fatura-${f.cartao_id}`}
           tom="alerta"
           icone={CreditCard}
           titulo={`Fatura ${f.nome}: ${formatar(f.total_centavos)}`}
@@ -277,6 +335,29 @@ function Alertas() {
           {f.dias_para_vencer === 0
             ? 'Vence hoje.'
             : `Vence em ${f.dias_para_vencer} ${f.dias_para_vencer === 1 ? 'dia' : 'dias'}.`}
+        </Alerta>
+      ))}
+      {limitesAltos.map((f) => (
+        <Alerta
+          key={`limite-${f.cartao_id}`}
+          tom={f.limite_disponivel_centavos < 0 ? 'desnecessario' : 'alerta'}
+          icone={CreditCard}
+          titulo={
+            f.limite_disponivel_centavos < 0
+              ? `Limite do ${f.nome} estourado`
+              : `Limite do ${f.nome} acima de ${LIMITE_ALERTA_PERCENTUAL}%`
+          }
+          acao={
+            <Link
+              to={comMes(`/cartoes/${f.cartao_id}`)}
+              className="text-sm font-medium text-destaque underline"
+            >
+              Ver cartão
+            </Link>
+          }
+        >
+          Você já usou {Math.round(f.limite_percentual)}% do limite. Disponível:{' '}
+          {formatar(f.limite_disponivel_centavos)}.
         </Alerta>
       ))}
     </>
@@ -304,9 +385,9 @@ function NecessarioDesnecessario({ resumo }: { resumo: ResumoMes }) {
   const desnecessario = resumo.desnecessario_centavos
   const total = necessario + desnecessario
   const pctNecessario = total > 0 ? Math.round((necessario * 100) / total) : 0
-  const meta = resumo.meta_desnecessario_centavos
-  const pctMeta = resumo.desnecessario_percentual
-  const nivel = nivelDoPercentual(pctMeta)
+  const previsao = resumo.meta_desnecessario_centavos
+  const pctPrevisao = resumo.desnecessario_percentual
+  const nivel = nivelDoPercentual(pctPrevisao)
 
   return (
     <Card>
@@ -339,21 +420,15 @@ function NecessarioDesnecessario({ resumo }: { resumo: ResumoMes }) {
           <dd className="valor mt-0.5 text-base font-semibold">{formatar(desnecessario)}</dd>
         </div>
       </dl>
-      {meta !== null && pctMeta !== null && (
+      {previsao !== null && pctPrevisao !== null && (
         <div className="mt-4 flex flex-col gap-1.5">
           <BarraProgresso
-            rotulo="Uso da meta de desnecessários"
-            percentual={pctMeta}
-            cor={
-              nivel === 'estourou'
-                ? 'bg-desnecessario'
-                : nivel === 'ok'
-                  ? 'bg-necessario'
-                  : 'bg-alerta'
-            }
+            rotulo="Uso da previsão de desnecessários"
+            percentual={pctPrevisao}
+            cor={corDaBarraDoNivel(nivel)}
           />
           <p className="text-sm text-secundario">
-            Meta de desnecessários: {formatar(meta)} · {Math.round(pctMeta)}% usado
+            Previsão de desnecessários: {formatar(previsao)} · {Math.round(pctPrevisao)}% usado
           </p>
         </div>
       )}
@@ -361,14 +436,14 @@ function NecessarioDesnecessario({ resumo }: { resumo: ResumoMes }) {
   )
 }
 
-function CardDividas({ resumo }: { resumo: ResumoMes }) {
+function CardContasAPagar({ resumo }: { resumo: ResumoMes }) {
   const comMes = useComMes()
   const formatar = useFormatarValor()
   if (resumo.dividas_total_centavos === 0) return null
   return (
-    <Link to={comMes('/dividas')} className="block rounded-card focus-visible:outline-2">
+    <Link to={comMes('/contas-a-pagar')} className="block rounded-card focus-visible:outline-2">
       <Card className="hover:bg-fundo">
-        <TituloCard>Dívidas do mês</TituloCard>
+        <TituloCard>Total de contas a pagar em {nomeMesMinusculo(resumo.mes_ref)}</TituloCard>
         <div className="mt-1 flex items-baseline justify-between gap-3">
           <span className="valor text-xl font-semibold">
             {formatar(resumo.dividas_total_centavos)}
@@ -385,6 +460,7 @@ function CardDividas({ resumo }: { resumo: ResumoMes }) {
   )
 }
 
+/** Carrossel dos cartões: fatura que fecha no mês e o limite (usado e disponível). */
 function Cartoes() {
   const mes = useMes()
   const comMes = useComMes()
@@ -394,31 +470,42 @@ function Cartoes() {
   return (
     <section aria-labelledby="titulo-cartoes" className="flex flex-col gap-2">
       <h2 id="titulo-cartoes" className="text-sm font-medium text-secundario">
-        Faturas que fecham em {formatarNomeMes(mes)}
+        Cartões · faturas que fecham em {nomeMesMinusculo(mes)}
       </h2>
       <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
         {faturas.data.map((f) => (
-          <li key={f.cartao_id} className="w-60 shrink-0 snap-start">
+          <li key={f.cartao_id} className="w-64 shrink-0 snap-start">
             <Link
               to={comMes(`/cartoes/${f.cartao_id}`)}
-              className="block h-full rounded-card border border-borda bg-card p-4 hover:bg-fundo"
+              className="flex h-full flex-col gap-3 rounded-card border border-borda bg-card p-4 hover:bg-fundo"
             >
-              <span className="flex items-center gap-2 text-sm text-secundario">
-                <span
-                  aria-hidden
-                  className="size-3 rounded-full"
-                  style={{ backgroundColor: f.cor }}
-                />
-                {f.nome}
+              <span>
+                <span className="flex items-center gap-2 text-sm text-secundario">
+                  <span
+                    aria-hidden
+                    className="size-3 rounded-full"
+                    style={{ backgroundColor: f.cor }}
+                  />
+                  {f.nome}
+                </span>
+                <span className="valor mt-1 block text-xl font-semibold">
+                  {formatar(f.total_centavos)}
+                </span>
+                <span className="mt-0.5 block text-xs text-secundario">
+                  Fatura · vence dia {diaDe(f.data_vencimento)}
+                  {f.status === 'paga' && ' · paga'}
+                </span>
               </span>
-              <span className="valor mt-1 block text-xl font-semibold">
-                {formatar(f.total_centavos)}
-              </span>
-              <span className="mt-1 block text-xs text-secundario">
-                Limite usado {Math.round(f.limite_percentual)}% · vence dia{' '}
-                {diaDe(f.data_vencimento)}
-                {f.status === 'paga' && ' · paga'}
-              </span>
+              <ResumoLimite
+                nomeCartao={f.nome}
+                compacto
+                limite={{
+                  limiteCentavos: f.limite_centavos,
+                  usadoCentavos: f.limite_usado_centavos,
+                  disponivelCentavos: f.limite_disponivel_centavos,
+                  percentual: f.limite_percentual,
+                }}
+              />
             </Link>
           </li>
         ))}
@@ -439,7 +526,7 @@ function ProximosVencimentos() {
       <div className="flex items-center justify-between gap-3">
         <TituloCard>Próximos vencimentos</TituloCard>
         <Link
-          to={comMes('/dividas')}
+          to={comMes('/contas-a-pagar')}
           className="text-sm font-medium text-destaque underline-offset-4 hover:underline"
         >
           Ver todas

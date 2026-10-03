@@ -1,6 +1,6 @@
 import { Plus, Receipt } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { Card } from '@/components/ui/Card'
 import { Carregando, Esqueleto } from '@/components/ui/Esqueleto'
@@ -16,6 +16,7 @@ import { type Gasto, useGastosDoMes } from '@/lib/dados/gastos'
 import { formatarData, formatarNomeMes } from '@/lib/datas'
 import { useMes } from '@/lib/mes'
 import { useFormatarValor } from '@/lib/valores'
+import { ReceitasDoMes } from '@/pages/receitas/ReceitasDoMes'
 
 import { ROTULO_ORIGEM, ROTULO_TIPO } from './rotulos'
 
@@ -30,7 +31,62 @@ const FILTROS = {
 
 type Filtro = keyof typeof FILTROS
 
+type Aba = 'gastos' | 'receitas'
+
+/** Aba Gastos, com o seletor "Gastos | Receitas" (?aba=receitas). */
 export default function Gastos() {
+  const mes = useMes()
+  const [parametros, definirParametros] = useSearchParams()
+  const aba: Aba = parametros.get('aba') === 'receitas' ? 'receitas' : 'gastos'
+
+  function trocar(nova: Aba) {
+    const novos = new URLSearchParams(parametros)
+    if (nova === 'gastos') novos.delete('aba')
+    else novos.set('aba', nova)
+    definirParametros(novos, { replace: true })
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{aba === 'gastos' ? 'Gastos' : 'Receitas'}</h1>
+          <p className="text-sm text-secundario">{formatarNomeMes(mes)}</p>
+        </div>
+        {aba === 'gastos' ? (
+          <LinkBotao to="/gastos/novo" icone={Plus}>
+            Novo gasto
+          </LinkBotao>
+        ) : (
+          <LinkBotao to="/receitas/nova" icone={Plus}>
+            Nova receita
+          </LinkBotao>
+        )}
+      </div>
+
+      <div role="group" aria-label="Ver gastos ou receitas" className="grid grid-cols-2 gap-2">
+        <Pilula
+          ativa={aba === 'gastos'}
+          onClick={() => trocar('gastos')}
+          className="justify-center"
+        >
+          Gastos
+        </Pilula>
+        <Pilula
+          ativa={aba === 'receitas'}
+          onClick={() => trocar('receitas')}
+          className="justify-center"
+        >
+          Receitas
+        </Pilula>
+      </div>
+
+      {aba === 'gastos' ? <GastosDoMes /> : <ReceitasDoMes />}
+    </div>
+  )
+}
+
+function GastosDoMes() {
   const mes = useMes()
   const gastos = useGastosDoMes(mes)
   const categorias = useCategorias()
@@ -54,17 +110,7 @@ export default function Gastos() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Gastos</h1>
-          <p className="text-sm text-secundario">{formatarNomeMes(mes)}</p>
-        </div>
-        <LinkBotao to="/gastos/novo" icone={Plus}>
-          Novo gasto
-        </LinkBotao>
-      </div>
-
+    <>
       <div
         role="group"
         aria-label="Filtrar gastos"
@@ -146,7 +192,7 @@ export default function Gastos() {
           ))}
         </>
       )}
-    </div>
+    </>
   )
 }
 

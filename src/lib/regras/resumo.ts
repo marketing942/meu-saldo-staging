@@ -12,8 +12,8 @@ import {
 import { type Centavos, percentual } from '@/lib/dinheiro'
 
 /**
- * Regras 2, 6, 7 e 8 — totais do mês, "pode gastar por dia" e metas.
- * Espelha public.resumo_mes e public.progresso_meta_receita.
+ * Regras 2, 6 e 7 — totais do mês, "pode gastar por dia" e previsão de desnecessários.
+ * Espelha public.resumo_mes.
  */
 
 // Dias do mês -----------------------------------------------------------------
@@ -118,7 +118,7 @@ export function sobraNoMes(
   return saldoCentavos - dividasPendentesCentavos - faturasPendentesCentavos
 }
 
-// Meta de desnecessários (regra 7) ----------------------------------------------
+// Previsão de desnecessários (regra 7) ------------------------------------------
 
 /** ok: abaixo de 70% · atencao: 70% a 89% · forte: 90% a 99% · estourou: 100% ou mais. */
 export type NivelAlerta = 'sem-meta' | 'ok' | 'atencao' | 'forte' | 'estourou'
@@ -174,47 +174,6 @@ export function alertaDesnecessarios(params: {
 
 function arredondarMeioParaCima(x: number): number {
   return x < 0 ? -Math.round(-x) : Math.round(x)
-}
-
-// Meta de receita (regra 8) ------------------------------------------------------
-
-export interface ProgressoMetaReceita {
-  percentual: number | null
-  faltaCentavos: Centavos | null
-  batida: boolean
-  /** "Entre R$ X por dia nos próximos N dias" (só no mês atual, enquanto falta). */
-  porDiaCentavos: Centavos | null
-  /** Marcações da barra. */
-  marcos: readonly [25, 50, 75]
-}
-
-export function progressoMetaReceita(params: {
-  metaCentavos: Centavos | null
-  recebidoCentavos: Centavos
-  /** Dias restantes no mês atual (contando hoje); null em outros meses. */
-  diasRestantes: number | null
-}): ProgressoMetaReceita {
-  const { metaCentavos: meta, recebidoCentavos: recebido, diasRestantes } = params
-  if (meta === null || meta <= 0) {
-    return {
-      percentual: null,
-      faltaCentavos: null,
-      batida: false,
-      porDiaCentavos: null,
-      marcos: [25, 50, 75],
-    }
-  }
-  const falta = Math.max(meta - recebido, 0)
-  return {
-    percentual: percentual(recebido, meta),
-    faltaCentavos: falta,
-    batida: recebido >= meta,
-    porDiaCentavos:
-      diasRestantes !== null && diasRestantes > 0 && falta > 0
-        ? Math.ceil(falta / diasRestantes)
-        : null,
-    marcos: [25, 50, 75],
-  }
 }
 
 // Projetos (regra 9) --------------------------------------------------------------

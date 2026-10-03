@@ -70,13 +70,13 @@ export function FormProjeto({
       <CampoValor rotulo="Orçamento (opcional, R$)" centavos={orcamento} aoMudar={setOrcamento} />
       <Interruptor
         rotulo="Descontar do saldo"
-        descricao="Os gastos do projeto saem do saldo da conta. Mesmo assim, ficam fora dos totais do mês."
+        descricao="Os gastos do projeto saem do saldo da carteira. Mesmo assim, ficam fora dos totais do mês."
         ligado={descontar}
         aoMudar={setDescontar}
       />
       {descontar && contas.data && contas.data.length > 0 && (
         <CampoConta
-          rotulo="Sai da conta"
+          rotulo="Sai da carteira"
           contas={contas.data}
           valor={contaId}
           aoMudar={setContaEscolhida}

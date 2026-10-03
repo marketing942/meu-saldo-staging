@@ -37,17 +37,20 @@ export const rotas: RouteObject[] = [
                   { path: 'gastos', ...tela(() => import('@/pages/gastos/Gastos')) },
                   { path: 'gastos/novo', ...tela(() => import('@/pages/gastos/FormGasto')) },
                   { path: 'gastos/:gastoId', ...tela(() => import('@/pages/gastos/FormGasto')) },
-                  { path: 'receitas', ...tela(() => import('@/pages/receitas/Receitas')) },
                   { path: 'receitas/nova', ...tela(() => import('@/pages/receitas/FormReceita')) },
                   {
                     path: 'receitas/:receitaId',
                     ...tela(() => import('@/pages/receitas/FormReceita')),
                   },
                   { path: 'cartoes/:cartaoId', ...tela(() => import('@/pages/cartoes/Cartao')) },
-                  { path: 'dividas', ...tela(() => import('@/pages/dividas/Dividas')) },
-                  { path: 'dividas/nova', ...tela(() => import('@/pages/dividas/FormDivida')) },
+                  // Contas a pagar (no banco e no código: dividas).
+                  { path: 'contas-a-pagar', ...tela(() => import('@/pages/dividas/Dividas')) },
                   {
-                    path: 'dividas/:dividaId',
+                    path: 'contas-a-pagar/nova',
+                    ...tela(() => import('@/pages/dividas/FormDivida')),
+                  },
+                  {
+                    path: 'contas-a-pagar/:dividaId',
                     ...tela(() => import('@/pages/dividas/FormDivida')),
                   },
                   { path: 'metas', ...tela(() => import('@/pages/metas/Metas')) },

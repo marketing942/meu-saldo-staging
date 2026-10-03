@@ -1,6 +1,6 @@
 # Finanças
 
-App de organização financeira pessoal: gastos do mês, cartões e faturas, dívidas, metas e projetos. É mobile-first, instalável (PWA) e em português do Brasil (R$, datas dd/mm/aaaa, fuso America/Sao_Paulo).
+App de organização financeira pessoal: gastos e receitas do mês, cartões (faturas e limite), contas a pagar, previsão de desnecessários e projetos. É mobile-first, instalável (PWA) e em português do Brasil (R$, datas dd/mm/aaaa, fuso America/Sao_Paulo).
 
 > "Finanças" é um nome provisório. Para trocar, veja [Trocar o nome do app](#trocar-o-nome-do-app).
 
@@ -49,6 +49,7 @@ Sem as variáveis de ambiente, o app abre uma tela explicando o que falta.
 | `npm run test:db`                 | Sobe um Postgres do Supabase no Docker, aplica as migrations e roda os testes pgTAP (RLS e regras) |
 | `npm run gen:types`               | Regenera `src/types/database.ts` a partir das migrations (`supabase gen types`)                    |
 | `npm run gen:pwa-assets`          | Regenera os ícones do PWA a partir de `public/icone.svg`                                           |
+| `npm run check:ptbr`              | Procura nos textos da interface palavras comuns sem acento (`-- --listar` mostra todos os textos)  |
 
 ## Estrutura
 
@@ -68,10 +69,12 @@ supabase/
   migrations/     schema, RLS, gatilhos e RPCs
   functions/      Edge Function excluir-conta (Deno)
   tests/          testes pgTAP (RLS com dois usuários e regras financeiras)
-scripts/          testes do banco e geração de tipos
+scripts/          testes do banco, geração de tipos e checagem de português (check-ptbr)
 ```
 
 As regras financeiras existem em dois lugares com os mesmos casos de teste: funções puras em `src/lib/regras` (Vitest) e funções SQL em `supabase/migrations` (pgTAP). Detalhes e decisões de modelagem estão em [`supabase/README.md`](supabase/README.md).
+
+Nomes na tela e no código: o que a interface chama de **Contas a pagar** (rota `/contas-a-pagar`) é a tabela `dividas`; a **Carteira** é a tabela `contas`; a **Previsão de desnecessários** é a coluna `profiles.meta_desnecessario_centavos`. Os nomes internos ficam sem acento; os textos de tela, não.
 
 ## Ambientes
 
@@ -176,7 +179,7 @@ Se usar um domínio próprio no Supabase (custom domain) ou um Sentry fora de `*
 O workflow `.github/workflows/ci.yml` roda em todo push e PR:
 
 - **app**: lint, formatação, tipos, testes unitários e build;
-- **e2e**: Playwright com as jornadas principais (cadastro, primeiro acesso, gastos, cartões e faturas, dívidas, metas, projetos, configurações, excluir conta) e checagem de acessibilidade com axe nos temas claro e escuro. Usa um Supabase falso em memória, sem rede nem segredos;
+- **e2e**: Playwright com as jornadas principais (cadastro, primeiro acesso, gastos e receitas, cartões, faturas e limite, contas a pagar, previsão de desnecessários, projetos, configurações, excluir conta) e checagem de acessibilidade com axe nos temas claro e escuro. Usa um Supabase falso em memória, sem rede nem segredos;
 - **banco**: aplica as migrations num Postgres do Supabase, roda os testes pgTAP (RLS com dois usuários e regras financeiras) e confere se `src/types/database.ts` está em dia com as migrations.
 
 ## Trocar o nome do app
@@ -194,9 +197,10 @@ Sem rastreadores nem analytics de terceiros. O Sentry é opcional e configurado 
 2. Projeto base: Vite, TypeScript, Tailwind, tokens e fontes, rotas, cliente Supabase tipado, `vercel.json`, CI e README
 3. Autenticação, termos e privacidade, onboarding, navegação por mês e tela Início
 4. Gastos, categorias, cartões, faturas e formulário de gasto
-5. Dívidas
-6. Metas (receita e projetos), alertas, lembrete e Configurações (inclui excluir conta)
+5. Contas a pagar
+6. Metas, alertas, lembrete e Configurações (inclui excluir conta)
 7. Testes ponta a ponta (Playwright), acessibilidade, dados de exemplo e checklist de deploy
+8. "Dívidas" virou "Contas a pagar"; a meta de receita saiu e Metas ficou com a previsão de desnecessários e os projetos; receitas na aba Gastos; limite do cartão por lançamento (`limite_cartao`); revisão de português
 
 Todas as fases estão concluídas. Antes de publicar, siga o [checklist de deploy](docs/CHECKLIST-DEPLOY.md).
 

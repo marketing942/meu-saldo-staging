@@ -5,7 +5,6 @@ import {
   diasDoMes,
   nivelDoPercentual,
   podeGastarPorDia,
-  progressoMetaReceita,
   progressoProjeto,
   sobraNoMes,
   totaisGastosDoMes,
@@ -72,7 +71,7 @@ describe('pode gastar por dia', () => {
   })
 })
 
-describe('meta de desnecessários', () => {
+describe('previsão de desnecessários', () => {
   it('faixas: verde < 70%, ocre 70–89%, alerta forte 90–99%, rosado >= 100%', () => {
     expect(nivelDoPercentual(69.99)).toBe('ok')
     expect(nivelDoPercentual(70)).toBe('atencao')
@@ -137,35 +136,6 @@ describe('meta de desnecessários', () => {
     })
     expect(alerta).toMatchObject({ nivel: 'estourou', percentual: 112, excedenteCentavos: 12000 })
     expect(alerta.projecaoCentavos).toBeNull()
-  })
-})
-
-describe('meta de receita', () => {
-  it('25%, faltam 150000, ~5173 por dia em 29 dias (cenário do SQL)', () => {
-    expect(
-      progressoMetaReceita({ metaCentavos: 200000, recebidoCentavos: 50000, diasRestantes: 29 }),
-    ).toEqual({
-      percentual: 25,
-      faltaCentavos: 150000,
-      batida: false,
-      porDiaCentavos: 5173,
-      marcos: [25, 50, 75],
-    })
-  })
-
-  it('meta batida a partir de 100%', () => {
-    expect(
-      progressoMetaReceita({ metaCentavos: 200000, recebidoCentavos: 210000, diasRestantes: 29 }),
-    ).toMatchObject({ percentual: 105, faltaCentavos: 0, batida: true, porDiaCentavos: null })
-  })
-
-  it('sem meta e fora do mês atual', () => {
-    expect(
-      progressoMetaReceita({ metaCentavos: null, recebidoCentavos: 0, diasRestantes: null }),
-    ).toMatchObject({ percentual: null, batida: false })
-    expect(
-      progressoMetaReceita({ metaCentavos: 1000, recebidoCentavos: 0, diasRestantes: null }),
-    ).toMatchObject({ porDiaCentavos: null, faltaCentavos: 1000 })
   })
 })
 

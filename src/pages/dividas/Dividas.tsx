@@ -1,4 +1,4 @@
-import { Check, Landmark, Plus, Undo2 } from 'lucide-react'
+import { CalendarClock, Check, Plus, Undo2 } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { BarraProgresso } from '@/components/ui/BarraProgresso'
@@ -18,11 +18,12 @@ import {
   useDividasDoMes,
   usePagarDivida,
 } from '@/lib/dados/dividas'
-import { diaDe, formatarData, formatarMesAno } from '@/lib/datas'
+import { diaDe, formatarData, nomeMesMinusculo } from '@/lib/datas'
 import { useMes } from '@/lib/mes'
 import { useFormatarValor } from '@/lib/valores'
 import { useAvisos } from '@/stores/avisos'
 
+/** Contas a pagar do mês (no banco e no código: dividas). */
 export default function Dividas() {
   const mes = useMes()
   const dividas = useDividasDoMes(mes)
@@ -39,14 +40,14 @@ export default function Dividas() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Dívidas</h1>
-        <LinkBotao to="/dividas/nova" icone={Plus}>
-          Nova dívida
+        <h1 className="text-2xl font-semibold">Contas a pagar</h1>
+        <LinkBotao to="/contas-a-pagar/nova" icone={Plus}>
+          Nova conta a pagar
         </LinkBotao>
       </div>
 
       {dividas.isPending ? (
-        <Carregando rotulo="Carregando dívidas" className="flex flex-col gap-3">
+        <Carregando rotulo="Carregando contas a pagar" className="flex flex-col gap-3">
           <Esqueleto className="h-40 w-full rounded-card" />
           <Esqueleto className="h-32 w-full rounded-card" />
         </Carregando>
@@ -54,20 +55,20 @@ export default function Dividas() {
         <EstadoErro erro={dividas.error} aoTentarDeNovo={() => void dividas.refetch()} />
       ) : lista.length === 0 ? (
         <EstadoVazio
-          icone={Landmark}
-          titulo="Nenhuma dívida neste mês"
-          descricao="Cadastre financiamentos, empréstimos, aluguel e assinaturas para ver o que vence a cada mês."
-          acao={<LinkBotao to="/dividas/nova">Cadastrar dívida</LinkBotao>}
+          icone={CalendarClock}
+          titulo="Nenhuma conta a pagar neste mês"
+          descricao="Cadastre financiamentos, empréstimos, aluguel, condomínio e assinaturas para ver o que vence a cada mês."
+          acao={<LinkBotao to="/contas-a-pagar/nova">Cadastrar conta a pagar</LinkBotao>}
         />
       ) : (
         <>
           <Card className="flex flex-col gap-3">
             <div>
-              <TituloCard>Você vai pagar em {formatarMesAno(mes)}</TituloCard>
+              <TituloCard>Total de contas a pagar em {nomeMesMinusculo(mes)}</TituloCard>
               <p className="valor mt-1 text-3xl font-semibold">{formatar(total)}</p>
             </div>
             <BarraProgresso
-              rotulo="Parte já paga das dívidas do mês"
+              rotulo="Parte já paga das contas do mês"
               percentual={total > 0 ? (pago * 100) / total : 0}
               cor="bg-necessario"
             />
@@ -127,7 +128,7 @@ function CardDivida({ divida }: { divida: DividaDoMes }) {
         <Inicial nome={divida.nome} />
         <div className="min-w-0 flex-1">
           <Link
-            to={`/dividas/${divida.divida_id}`}
+            to={`/contas-a-pagar/${divida.divida_id}`}
             className="block truncate font-medium underline-offset-4 hover:underline"
           >
             {divida.nome}

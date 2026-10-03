@@ -32,9 +32,10 @@ Use antes de cada publicação. Os passos detalhados estão no [README](../READM
 
 - [ ] Abrir o endereço: carrega a tela Entrar (se aparecer "não está configurado", revise as variáveis).
 - [ ] Criar conta → primeiro acesso → Início com "Olá, nome".
-- [ ] Lançar um gasto no Pix, uma receita e uma compra parcelada no cartão; conferir saldo, Gastos e a fatura.
-- [ ] Cadastrar uma dívida e marcar a parcela do mês como paga.
-- [ ] Definir meta de receita e de desnecessários; ver o progresso em Metas e o alerta no Início.
+- [ ] Lançar um gasto no Pix, uma receita e uma compra parcelada no cartão; conferir saldo, Gastos (e Receitas) e a fatura.
+- [ ] Conferir o limite do cartão (usado e disponível) no Início, na tela do cartão e no formulário de gasto; marcar a fatura como paga e ver o limite voltar.
+- [ ] Cadastrar uma conta a pagar e marcar a parcela do mês como paga.
+- [ ] Definir a previsão de desnecessários em Metas; ver o progresso lá e o alerta no Início.
 - [ ] Recarregar a página (a sessão continua) e Sair.
 - [ ] "Esqueci minha senha": o e-mail chega e o link abre `/nova-senha`.
 - [ ] Em staging: Configurações › Dados de exemplo › Carregar e depois Limpar.

@@ -187,3 +187,14 @@ export function formatarNomeMes(mes: MesRef): string {
   const [a, m] = partesMes(mes)
   return capitalizar(format(new Date(a, m - 1, 1, 12), 'MMMM', { locale: ptBR }))
 }
+
+/** '2026-10' -> 'outubro' (no meio da frase o nome do mês vai em minúscula). */
+export function nomeMesMinusculo(mes: MesRef): string {
+  const [a, m] = partesMes(mes)
+  return format(new Date(a, m - 1, 1, 12), 'MMMM', { locale: ptBR })
+}
+
+/** '2026-10' -> 'outubro de 2026' (para o meio da frase). */
+export function mesAnoPorExtenso(mes: MesRef): string {
+  return `${nomeMesMinusculo(mes)} de ${partesMes(mes)[0]}`
+}

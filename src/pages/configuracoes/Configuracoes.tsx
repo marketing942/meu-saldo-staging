@@ -54,14 +54,10 @@ export default function Configuracoes() {
 
       <Card className="py-1">
         <ul className="divide-y divide-borda">
-          <ItemLink para="/configuracoes/contas" icone={Wallet} rotulo="Contas" />
+          <ItemLink para="/configuracoes/contas" icone={Wallet} rotulo="Carteiras" />
           <ItemLink para="/configuracoes/cartoes" icone={CreditCard} rotulo="Cartões" />
           <ItemLink para="/configuracoes/categorias" icone={Tags} rotulo="Categorias" />
-          <ItemLink
-            para="/metas?aba=desnecessarios"
-            icone={Target}
-            rotulo="Meta de desnecessários"
-          />
+          <ItemLink para="/metas" icone={Target} rotulo="Previsão de desnecessários" />
         </ul>
       </Card>
 
@@ -82,7 +78,7 @@ export default function Configuracoes() {
           to="/configuracoes/excluir-conta"
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-botao text-[15px] font-medium text-desnecessario underline-offset-4 hover:underline"
         >
-          <Icone icone={Trash2} tamanho={18} /> Excluir minha conta
+          <Icone icone={Trash2} tamanho={18} /> Excluir minha conta e todos os dados
         </Link>
       </div>
 
@@ -220,7 +216,7 @@ function DadosDeExemplo() {
     try {
       if (acao === 'carregar') {
         const conta = contas.data ? contaPadrao(contas.data) : undefined
-        if (!conta) throw new Error('Sem conta para os exemplos.')
+        if (!conta) throw new Error('Sem carteira para os exemplos.')
         await carregarDadosDeExemplo(uid, conta.conta_id)
       } else {
         await limparDadosDeExemplo(uid)
@@ -242,8 +238,8 @@ function DadosDeExemplo() {
         <Icone icone={Database} tamanho={18} /> Dados de exemplo
       </TituloCard>
       <p className="text-sm text-secundario">
-        Só aparece fora de produção. Cria um cartão, gastos, receitas, dívidas e um projeto com
-        &quot;(exemplo)&quot; no nome, para testar o app.
+        Só aparece fora de produção. Cria um cartão, gastos, receitas, contas a pagar e um projeto
+        com &quot;(exemplo)&quot; no nome, para testar o app.
       </p>
       {erro && (
         <Alerta tom="desnecessario" icone={CircleAlert} anunciar>

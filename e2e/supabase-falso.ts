@@ -11,19 +11,11 @@ import { randomUUID } from 'node:crypto'
 
 import type { BrowserContext, Request, Route } from '@playwright/test'
 
-import {
-  type MesRef,
-  dataNoMes,
-  hoje,
-  mesAdd,
-  mesAtual,
-  mesDe,
-  primeiroDia,
-  ultimoDia,
-} from '@/lib/datas'
+import { type MesRef, dataNoMes, hoje, mesAtual, primeiroDia, ultimoDia } from '@/lib/datas'
 import {
   faturaQueVenceNoMes,
   fechamentoFatura,
+  limiteCartao,
   mesFatura,
   statusFatura,
   vencimentoFatura,
@@ -40,7 +32,6 @@ import {
   alertaDesnecessarios,
   diasDoMes,
   podeGastarPorDia,
-  progressoMetaReceita,
   sobraNoMes,
   totaisGastosDoMes,
 } from '@/lib/regras/resumo'
@@ -68,7 +59,6 @@ const TABELAS = [
   'faturas_pagas',
   'dividas',
   'dividas_pagamentos',
-  'metas_receita',
   'projetos',
   'projeto_gastos',
   'aprendizado_categoria',
@@ -103,7 +93,6 @@ const OBRIGATORIAS: Partial<Record<Tabela, string[]>> = {
     'ativa',
   ],
   dividas_pagamentos: ['divida_id', 'mes_ref', 'pago_em', 'valor_centavos', 'forma_pagamento'],
-  metas_receita: ['mes_ref', 'valor_meta_centavos'],
   projetos: ['nome', 'descontar_do_saldo', 'arquivado'],
   projeto_gastos: ['projeto_id', 'descricao', 'valor_centavos', 'data'],
   aprendizado_categoria: ['termo', 'categoria_id', 'tipo'],
@@ -111,7 +100,6 @@ const OBRIGATORIAS: Partial<Record<Tabela, string[]>> = {
 
 /** Unicidade (para upsert e erros 23505), como nas migrations. */
 const UNICOS: Partial<Record<Tabela, string[]>> = {
-  metas_receita: ['user_id', 'mes_ref'],
   aprendizado_categoria: ['user_id', 'termo'],
   faturas_pagas: ['user_id', 'cartao_id', 'mes_ref'],
   dividas_pagamentos: ['divida_id', 'mes_ref'],
@@ -545,6 +533,39 @@ export class SupabaseFalso {
       .sort((a, b) => (a.data_vencimento < b.data_vencimento ? -1 : 1))
   }
 
+  /** Espelha public.limite_cartao: lançamentos não excluídos em faturas não pagas. */
+  limiteCartao(uid: string, cartaoId: string) {
+    const cartao = this.linhas('cartoes', uid).find((c) => c.id === cartaoId)
+    if (!cartao) return null
+    const pagas = new Set(
+      this.linhas('faturas_pagas', uid)
+        .filter((f) => f.cartao_id === cartaoId)
+        .map((f) => str(f.mes_ref)),
+    )
+    const compras = this.linhas('gastos', uid)
+      .filter((g) => g.cartao_id === cartaoId)
+      .map((g) => ({
+        valorCentavos: num(g.valor_centavos),
+        faturaMesRef: str(g.fatura_mes_ref),
+        excluido: !!g.deleted_at,
+      }))
+    const contasAPagar = this.linhas('dividas_pagamentos', uid)
+      .filter((p) => p.cartao_id === cartaoId)
+      .map((p) => ({
+        valorCentavos: num(p.valor_centavos),
+        faturaMesRef: str(p.fatura_mes_ref),
+        excluido: !this.dividaAtiva(uid, p),
+      }))
+    const limite = limiteCartao(num(cartao.limite_centavos), [...compras, ...contasAPagar], pagas)
+    return {
+      cartao_id: cartaoId,
+      limite_centavos: limite.limiteCentavos,
+      usado_centavos: limite.usadoCentavos,
+      disponivel_centavos: limite.disponivelCentavos,
+      percentual: limite.percentual,
+    }
+  }
+
   faturasDoMes(uid: string, mes: MesRef, cartaoId?: string) {
     const hojeISO = hoje()
     return this.linhas('cartoes', uid)
@@ -559,26 +580,7 @@ export class SupabaseFalso {
         )
         const comprasTotal = compras.reduce((s, g) => s + num(g.valor_centavos), 0)
         const total = this.totalFatura(uid, c.id, mes)
-        const pagas = new Set(
-          this.linhas('faturas_pagas', uid)
-            .filter((f) => f.cartao_id === c.id)
-            .map((f) => str(f.mes_ref)),
-        )
-        const usado =
-          this.linhas('gastos', uid)
-            .filter(
-              (g) => g.cartao_id === c.id && !g.deleted_at && !pagas.has(str(g.fatura_mes_ref)),
-            )
-            .reduce((s, g) => s + num(g.valor_centavos), 0) +
-          this.linhas('dividas_pagamentos', uid)
-            .filter(
-              (p) =>
-                p.cartao_id === c.id &&
-                this.dividaAtiva(uid, p) &&
-                !pagas.has(str(p.fatura_mes_ref)),
-            )
-            .reduce((s, p) => s + num(p.valor_centavos), 0)
-        const limite = num(c.limite_centavos)
+        const limite = this.limiteCartao(uid, c.id)
         const vencimento = vencimentoFatura(mes, fechamento, num(c.dia_vencimento))
         return {
           cartao_id: c.id,
@@ -594,10 +596,10 @@ export class SupabaseFalso {
           dividas_centavos: total - comprasTotal,
           total_centavos: total,
           qtd_compras: compras.length,
-          limite_centavos: limite,
-          limite_usado_centavos: usado,
-          limite_disponivel_centavos: limite - usado,
-          limite_percentual: Math.round((usado * 10_000) / limite) / 100,
+          limite_centavos: limite?.limite_centavos ?? 0,
+          limite_usado_centavos: limite?.usado_centavos ?? 0,
+          limite_disponivel_centavos: limite?.disponivel_centavos ?? 0,
+          limite_percentual: limite?.percentual ?? 0,
           pago_em: paga?.pago_em ?? null,
           conta_pagamento_id: paga?.conta_id ?? null,
         }
@@ -674,32 +676,6 @@ export class SupabaseFalso {
       dias_restantes: dias.diasRestantes,
       pode_gastar_dia_centavos: podeGastarPorDia(saldo, pendentes, dias.diasRestantes),
       lancou_hoje: lancou,
-    }
-  }
-
-  progressoMeta(uid: string, mes: MesRef) {
-    const meta = this.linhas('metas_receita', uid).find((m) => m.mes_ref === mes)
-    const anterior = this.linhas('metas_receita', uid).find((m) => m.mes_ref === mesAdd(mes, -1))
-    const recebido = this.linhas('receitas', uid)
-      .filter((r) => !r.deleted_at && mesDe(str(r.data)) === mes)
-      .reduce((s, r) => s + num(r.valor_centavos), 0)
-    const atual = mes === mesAtual()
-    const restantes = atual ? diasDoMes(mes, hoje()).diasRestantes : null
-    const p = progressoMetaReceita({
-      metaCentavos: meta ? num(meta.valor_meta_centavos) : null,
-      recebidoCentavos: recebido,
-      diasRestantes: restantes,
-    })
-    return {
-      mes_ref: mes,
-      meta_centavos: meta ? num(meta.valor_meta_centavos) : null,
-      meta_mes_anterior_centavos: anterior ? num(anterior.valor_meta_centavos) : null,
-      recebido_centavos: recebido,
-      percentual: p.percentual,
-      falta_centavos: p.faltaCentavos,
-      batida: p.batida,
-      dias_restantes: restantes,
-      por_dia_centavos: p.porDiaCentavos,
     }
   }
 
@@ -855,8 +831,10 @@ export class SupabaseFalso {
         return this.faturasDoMes(uid, mes, (args.p_cartao_id as string | undefined) ?? undefined)
       case 'fatura_cartao':
         return this.faturasDoMes(uid, mes, str(args.p_cartao_id as Valor))
-      case 'progresso_meta_receita':
-        return [this.progressoMeta(uid, mes)]
+      case 'limite_cartao': {
+        const limite = this.limiteCartao(uid, str(args.p_cartao_id as Valor))
+        return limite ? [limite] : []
+      }
       default:
         throw new ErroBanco('PGRST202', `função não simulada: ${nome}`, 404)
     }

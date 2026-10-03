@@ -15,14 +15,19 @@ test('tema e ocultar valores ficam no perfil', async ({ page, banco }) => {
   await expect(page.getByText('R$ 0,00').first()).toBeVisible()
 })
 
-test('contas, categorias e proteção ao excluir conta com lançamentos', async ({ page, banco }) => {
+test('carteiras, categorias e proteção ao excluir carteira com lançamentos', async ({
+  page,
+  banco,
+}) => {
   const usuario = await usuarioLogado(page, banco)
-  await page.goto('/configuracoes/contas')
-  await page.getByRole('button', { name: 'Nova conta' }).click()
+  await page.goto('/configuracoes')
+  await page.getByRole('link', { name: 'Carteiras' }).click()
+  await expect(page.getByRole('heading', { name: 'Carteiras' })).toBeVisible()
+  await page.getByRole('button', { name: 'Nova carteira' }).click()
   await page.getByLabel('Nome').fill('Banco')
   await page.getByLabel('Saldo inicial (R$)').pressSequentially('100000')
   await page.getByRole('button', { name: 'Salvar' }).click()
-  await expect(page.getByText('Conta criada.')).toBeVisible()
+  await expect(page.getByText('Carteira criada.')).toBeVisible()
   await expect(page.getByText('R$ 1.000,00')).toBeVisible()
 
   banco.inserir(usuario.id, 'receitas', {
@@ -31,9 +36,11 @@ test('contas, categorias e proteção ao excluir conta com lançamentos', async 
     conta_id: usuario.carteira,
   })
   await page.getByRole('button', { name: 'Editar' }).first().click()
-  await page.getByRole('button', { name: 'Excluir conta' }).click()
+  await page.getByRole('button', { name: 'Excluir carteira' }).click()
   await page.getByRole('button', { name: 'Excluir', exact: true }).click()
-  await expect(page.getByText('Esta conta tem lançamentos e não pode ser excluída.')).toBeVisible()
+  await expect(
+    page.getByText('Esta carteira tem lançamentos e não pode ser excluída.'),
+  ).toBeVisible()
 
   await page.goto('/configuracoes/categorias')
   await page.getByRole('button', { name: 'Nova' }).click()
@@ -66,7 +73,7 @@ test('dados de exemplo: carregar e limpar', async ({ page, banco }) => {
 test('excluir minha conta apaga tudo e volta para /entrar', async ({ page, banco }) => {
   await usuarioLogado(page, banco)
   await page.goto('/configuracoes')
-  await page.getByRole('link', { name: 'Excluir minha conta' }).click()
+  await page.getByRole('link', { name: 'Excluir minha conta e todos os dados' }).click()
   const botao = page.getByRole('button', { name: 'Excluir minha conta para sempre' })
   await expect(botao).toBeDisabled()
   await page.getByLabel('Para confirmar, digite EXCLUIR').fill('excluir')

@@ -70,6 +70,7 @@ test('compra parcelada no cartão: parcelas, fatura, pagamento e desfazer', asyn
 
   await page.goto('/gastos/novo')
   await page.getByRole('button', { name: 'Cartão', exact: true }).click()
+  await expect(page.getByText('Disponível: R$ 5.000,00')).toBeVisible()
   await page.getByLabel('Parcelas').selectOption('3')
   await digitarValor(page, /Valor total/, '30001')
   await page.getByLabel('Descrição').fill('Tênis')
@@ -89,10 +90,15 @@ test('compra parcelada no cartão: parcelas, fatura, pagamento e desfazer', asyn
   await expect(page.getByRole('heading', { name: 'Nubank' })).toBeVisible()
   await expect(page.getByText('R$ 100,01').first()).toBeVisible()
   await expect(page.getByText(/parcela 1\/3/)).toBeVisible()
+  // A compra parcelada ocupa o limite inteiro (as 3 parcelas).
+  await expect(page.getByText('R$ 300,01 · 6%')).toBeVisible()
+  await expect(page.getByText('R$ 4.699,99')).toBeVisible()
 
   await page.getByRole('button', { name: 'Marcar fatura como paga' }).click()
   await expect(page.getByText('Fatura marcada como paga.')).toBeVisible()
   await expect(page.getByText('Paga', { exact: true })).toBeVisible()
+  // Fatura paga devolve ao limite a parcela que estava nela.
+  await expect(page.getByText('R$ 200,00 · 4%')).toBeVisible()
   expect(banco.linhas('faturas_pagas', usuario.id)[0]).toMatchObject({
     mes_ref: mes,
     conta_id: usuario.carteira,
@@ -102,6 +108,7 @@ test('compra parcelada no cartão: parcelas, fatura, pagamento e desfazer', asyn
   await page.getByRole('button', { name: 'Desfazer', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Marcar fatura como paga' })).toBeVisible()
   expect(banco.linhas('faturas_pagas', usuario.id)).toHaveLength(0)
+  await expect(page.getByText('R$ 300,01 · 6%')).toBeVisible()
 
   // Editar compra parcelada só muda descrição, categoria e tipo (em todas as parcelas).
   await page.goto(`/gastos/${parcelas[0]?.id}`)
@@ -153,9 +160,10 @@ test('editar, filtrar e excluir com desfazer', async ({ page, banco }) => {
   expect(banco.linhas('gastos', usuario.id).every((g) => g.deleted_at === null)).toBe(true)
 })
 
-test('receita entra no saldo e aparece em Receitas', async ({ page, banco }) => {
+test('receita entra no saldo e aparece na aba Gastos, em Receitas', async ({ page, banco }) => {
   const usuario = await usuarioLogado(page, banco)
-  await page.goto('/receitas/nova')
+  await page.getByRole('button', { name: 'Novo' }).click()
+  await page.getByRole('link', { name: 'Receita', exact: true }).click()
   await digitarValor(page, 'Valor (R$)', '300000')
   await page.getByLabel('Descrição').fill('Salário')
   await page.getByRole('button', { name: 'Salvar receita' }).click()
@@ -164,8 +172,79 @@ test('receita entra no saldo e aparece em Receitas', async ({ page, banco }) => 
     valor_centavos: 300000,
     conta_id: usuario.carteira,
   })
-  await page.goto('/')
   await expect(page.getByText('R$ 3.000,00').first()).toBeVisible()
+
+  await page.getByRole('link', { name: 'Gastos', exact: true }).click()
+  await page.getByRole('button', { name: 'Receitas', exact: true }).click()
+  await expect(page).toHaveURL(/\/gastos\?aba=receitas$/)
+  await expect(page.getByRole('heading', { name: 'Receitas', level: 1 })).toBeVisible()
+
+  // Editar e excluir com desfazer, a partir da lista de receitas.
+  await page.getByRole('link', { name: /Salário/ }).click()
+  await digitarValor(page, 'Valor (R$)', '320000')
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page).toHaveURL(/\/gastos\?aba=receitas$/)
+  await expect(page.getByText('+ R$ 3.200,00')).toBeVisible()
+
+  await page.getByRole('link', { name: /Salário/ }).click()
+  await page.getByRole('button', { name: 'Excluir receita' }).click()
+  await page.getByRole('button', { name: 'Excluir', exact: true }).click()
+  await expect(page.getByText('Receita excluída.')).toBeVisible()
+  await expect(page.getByText('Nenhuma receita neste mês')).toBeVisible()
+  await page.getByRole('button', { name: 'Desfazer' }).click()
+  await expect(page.getByRole('link', { name: /Salário/ })).toBeVisible()
+})
+
+test('limite do cartão: disponível no formulário, compra acima do limite e excluir com desfazer', async ({
+  page,
+  banco,
+}) => {
+  const usuario = await usuarioLogado(page, banco)
+  const cartao = banco.inserir(usuario.id, 'cartoes', {
+    nome: 'Visa',
+    limite_centavos: 10000,
+    dia_fechamento: 5,
+    dia_vencimento: 12,
+  })
+
+  await page.goto('/gastos/novo')
+  await page.getByRole('button', { name: 'Cartão', exact: true }).click()
+  await expect(page.getByText('Disponível: R$ 100,00')).toBeVisible()
+  await digitarValor(page, 'Valor (R$)', '15000')
+  await page.getByLabel('Descrição').fill('Celular')
+  await page.getByRole('button', { name: 'Necessário', exact: true }).click()
+  await expect(page.getByText('Esta compra passa do limite disponível (R$ 100,00)')).toBeVisible()
+
+  // Sem confirmar, não salva.
+  await page.getByRole('button', { name: 'Salvar gasto' }).click()
+  await expect(page.getByText('Confirme que quer salvar a compra acima do limite.')).toBeVisible()
+  expect(banco.linhas('gastos', usuario.id)).toHaveLength(0)
+
+  await page.getByLabel('Salvar mesmo assim').check()
+  await page.getByRole('button', { name: 'Salvar gasto' }).click()
+  await expect(page.getByText('Gasto salvo.')).toBeVisible()
+  expect(banco.limiteCartao(usuario.id, cartao.id)).toMatchObject({
+    usado_centavos: 15000,
+    disponivel_centavos: -5000,
+  })
+
+  // Início: limite no carrossel e alerta de limite estourado.
+  await page.getByRole('link', { name: 'Início', exact: true }).click()
+  await expect(page.getByText('Limite do Visa estourado')).toBeVisible()
+  await expect(page.getByText('R$ 150,00 · 150%')).toBeVisible()
+
+  // Excluir devolve o limite na hora; desfazer volta a ocupar.
+  await page.getByRole('link', { name: 'Gastos', exact: true }).click()
+  await page.getByRole('link', { name: /Celular/ }).click()
+  await page.getByRole('button', { name: 'Excluir gasto' }).click()
+  await page.getByRole('button', { name: 'Excluir', exact: true }).click()
+  await expect(page.getByText('Gasto excluído.')).toBeVisible()
+  await page.getByRole('link', { name: 'Início', exact: true }).click()
+  await expect(page.getByText('R$ 0,00 · 0%')).toBeVisible()
+  await expect(page.getByText('Limite do Visa estourado')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Desfazer' }).click()
+  await expect(page.getByText('Limite do Visa estourado')).toBeVisible()
+  expect(banco.limiteCartao(usuario.id, cartao.id)?.usado_centavos).toBe(15000)
 })
 
 test('navegação por mês troca o mês da tela e mantém ao trocar de aba', async ({ page, banco }) => {
@@ -173,7 +252,7 @@ test('navegação por mês troca o mês da tela e mantém ao trocar de aba', asy
   await page.getByRole('button', { name: 'Próximo mês' }).click()
   await expect(page.getByText('previsto')).toBeVisible()
   await expect(page).toHaveURL(/\?mes=\d{4}-\d{2}$/)
-  await page.getByRole('link', { name: 'Gastos' }).click()
+  await page.getByRole('link', { name: 'Gastos', exact: true }).click()
   await expect(page).toHaveURL(/\/gastos\?mes=\d{4}-\d{2}$/)
   await page.getByRole('button', { name: 'Mês anterior' }).click()
   await expect(page.getByText('mês atual')).toBeVisible()

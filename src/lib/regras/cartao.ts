@@ -1,5 +1,5 @@
 import { type DataISO, type MesRef, dataNoMes, diaDe, mesAdd, mesDe } from '@/lib/datas'
-import type { Centavos } from '@/lib/dinheiro'
+import { type Centavos, percentual } from '@/lib/dinheiro'
 
 /**
  * Regra 3 — fatura do cartão. A fatura é identificada pelo mês em que FECHA.
@@ -85,13 +85,65 @@ export function gerarParcelas(
   }))
 }
 
-/** Limite usado: tudo que está em faturas ainda não pagas (inclui parcelas futuras). */
+/**
+ * Lançamento que ocupa o limite: cada parcela de compra (à vista = 1 parcela) e
+ * cada parcela de conta a pagar paga no cartão, na fatura em que entrou.
+ */
+export interface LancamentoLimite {
+  valorCentavos: Centavos
+  faturaMesRef: MesRef
+  /** Excluído (ou conta a pagar excluída): não ocupa o limite. Desfazer volta a ocupar. */
+  excluido?: boolean
+}
+
+/**
+ * Limite usado: tudo que está em faturas ainda não pagas, inclusive as parcelas
+ * de meses futuros. Marcar a fatura como paga devolve o valor dela ao limite.
+ */
 export function limiteUsado(
-  lancamentos: ReadonlyArray<{ valorCentavos: Centavos; faturaMesRef: MesRef }>,
+  lancamentos: ReadonlyArray<LancamentoLimite>,
   faturasPagas: ReadonlySet<MesRef>,
 ): Centavos {
   return lancamentos.reduce(
-    (soma, l) => (faturasPagas.has(l.faturaMesRef) ? soma : soma + l.valorCentavos),
+    (soma, l) => (l.excluido || faturasPagas.has(l.faturaMesRef) ? soma : soma + l.valorCentavos),
     0,
   )
+}
+
+export interface LimiteCartao {
+  limiteCentavos: Centavos
+  usadoCentavos: Centavos
+  /** Pode ficar negativo quando as compras passam do limite. */
+  disponivelCentavos: Centavos
+  percentual: number
+}
+
+/** Espelha public.limite_cartao. */
+export function limiteCartao(
+  limiteCentavos: Centavos,
+  lancamentos: ReadonlyArray<LancamentoLimite>,
+  faturasPagas: ReadonlySet<MesRef>,
+): LimiteCartao {
+  const usado = limiteUsado(lancamentos, faturasPagas)
+  return {
+    limiteCentavos,
+    usadoCentavos: usado,
+    disponivelCentavos: limiteCentavos - usado,
+    percentual: percentual(usado, limiteCentavos),
+  }
+}
+
+/** A partir deste percentual de uso, o app avisa que o limite está acabando. */
+export const LIMITE_ALERTA_PERCENTUAL = 80
+
+/**
+ * Quanto uma compra nova (ou editada) passa do disponível; 0 se cabe.
+ * Na edição, o valor antigo já está no "usado" e volta antes de comparar.
+ */
+export function excessoNoLimite(
+  disponivelCentavos: Centavos,
+  valorCompraCentavos: Centavos,
+  valorAnteriorCentavos: Centavos = 0,
+): Centavos {
+  return Math.max(valorCompraCentavos - valorAnteriorCentavos - disponivelCentavos, 0)
 }

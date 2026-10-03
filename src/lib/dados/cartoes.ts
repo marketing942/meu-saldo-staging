@@ -15,6 +15,8 @@ export type Fatura = Anulavel<
   'pago_em' | 'conta_pagamento_id'
 >
 
+export type LimiteCartao = Funcoes['limite_cartao']['Returns'][number]
+
 export function useCartoes() {
   const { id } = useUsuario()
   return useQuery({
@@ -52,6 +54,25 @@ export function useFatura(cartaoId: string, mes: MesRef) {
   })
 }
 
+/**
+ * Limite total, usado e disponível do cartão, calculados pelo banco a cada
+ * consulta (public.limite_cartao). Toda gravação invalida as consultas, então
+ * lançar, editar, excluir, desfazer ou pagar a fatura atualiza o limite na hora.
+ */
+export function useLimiteCartao(cartaoId: string | undefined) {
+  const { id } = useUsuario()
+  return useQuery({
+    queryKey: ['limite-cartao', id, cartaoId],
+    enabled: Boolean(cartaoId),
+    queryFn: async () => {
+      const linhas = await dados<LimiteCartao[]>(
+        supabase.rpc('limite_cartao', { p_cartao_id: cartaoId ?? '' }),
+      )
+      return linhas[0] ?? null
+    },
+  })
+}
+
 export interface LancamentoFatura {
   id: string
   tipo: 'compra' | 'divida'
@@ -62,7 +83,7 @@ export interface LancamentoFatura {
   total_parcelas: number
 }
 
-/** Compras e dívidas pagas no cartão que entraram na fatura do mês. */
+/** Compras e contas a pagar pagas no cartão que entraram na fatura do mês. */
 export function useLancamentosFatura(cartaoId: string, mes: MesRef) {
   const { id } = useUsuario()
   return useQuery({
@@ -108,7 +129,7 @@ export function useLancamentosFatura(cartaoId: string, mes: MesRef) {
           .map((p) => ({
             id: p.id,
             tipo: 'divida' as const,
-            descricao: nomes.get(p.divida_id) ?? 'Dívida',
+            descricao: nomes.get(p.divida_id) ?? 'Conta a pagar',
             data: p.pago_em,
             valor_centavos: p.valor_centavos,
             parcela_atual: 1,

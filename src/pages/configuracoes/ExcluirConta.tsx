@@ -36,8 +36,8 @@ export default function ExcluirConta() {
       <Card>
         <form noValidate onSubmit={(e) => void excluir(e)} className="flex flex-col gap-4">
           <Alerta tom="desnecessario" icone={CircleAlert} titulo="Esta ação não tem volta">
-            Todos os seus dados serão apagados de forma definitiva: contas, gastos, receitas,
-            cartões, faturas, dívidas, metas e projetos.
+            Todos os seus dados serão apagados de forma definitiva: carteiras, gastos, receitas,
+            cartões, faturas, contas a pagar, previsão de desnecessários e projetos.
           </Alerta>
           {erro && (
             <Alerta tom="alerta" icone={CircleAlert} anunciar>

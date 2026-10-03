@@ -1,4 +1,4 @@
-import { House, Landmark, type LucideIcon, Receipt, Target } from 'lucide-react'
+import { CalendarClock, House, type LucideIcon, Receipt, Target } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router'
 
 import { Icone } from '@/components/ui/Icone'
@@ -13,7 +13,8 @@ interface Aba {
 const ABAS: readonly Aba[] = [
   { para: '/', rotulo: 'Início', icone: House },
   { para: '/gastos', rotulo: 'Gastos', icone: Receipt },
-  { para: '/dividas', rotulo: 'Dívidas', icone: Landmark },
+  // "Contas a pagar" não cabe no rótulo da aba; o título da tela é completo.
+  { para: '/contas-a-pagar', rotulo: 'A pagar', icone: CalendarClock },
   { para: '/metas', rotulo: 'Metas', icone: Target },
 ]
 

@@ -13,8 +13,8 @@ export default function Privacidade() {
       <ul>
         <li>Dados de cadastro: nome, e-mail e senha (guardada de forma cifrada).</li>
         <li>
-          Dados que você lança: contas, gastos, receitas, cartões, faturas, dívidas, metas e
-          projetos.
+          Dados que você lança: carteiras, gastos, receitas, cartões, faturas, contas a pagar,
+          previsão de desnecessários e projetos.
         </li>
         <li>Preferências do app: tema, ocultar valores e lembrete diário.</li>
       </ul>

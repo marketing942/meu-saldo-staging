@@ -25,6 +25,7 @@ interface Conta {
   saldo_centavos: number
 }
 
+/** Carteiras (no banco: tabela contas). */
 export default function Contas() {
   const contas = useContas()
   const formatar = useFormatarValor()
@@ -33,12 +34,12 @@ export default function Contas() {
   return (
     <div className="flex flex-col gap-4">
       <CabecalhoConfig
-        titulo="Contas"
-        descricao="O saldo total é a soma das contas."
+        titulo="Carteiras"
+        descricao="O saldo total é a soma das carteiras."
         acao={
           editando !== 'nova' && (
             <Botao icone={Plus} onClick={() => setEditando('nova')}>
-              Nova conta
+              Nova carteira
             </Botao>
           )
         }
@@ -49,7 +50,7 @@ export default function Contas() {
         </Card>
       )}
       {contas.isPending ? (
-        <Carregando rotulo="Carregando contas">
+        <Carregando rotulo="Carregando carteiras">
           <Esqueleto className="h-32 w-full rounded-card" />
         </Carregando>
       ) : contas.isError ? (
@@ -57,9 +58,9 @@ export default function Contas() {
       ) : contas.data.length === 0 ? (
         <EstadoVazio
           icone={Wallet}
-          titulo="Nenhuma conta"
-          descricao="Cadastre onde seu dinheiro fica: carteira, banco, poupança."
-          acao={<Botao onClick={() => setEditando('nova')}>Cadastrar conta</Botao>}
+          titulo="Nenhuma carteira"
+          descricao="Cadastre onde seu dinheiro fica: dinheiro vivo, banco, poupança."
+          acao={<Botao onClick={() => setEditando('nova')}>Cadastrar carteira</Botao>}
         />
       ) : (
         <Card className="py-1">
@@ -121,7 +122,7 @@ function FormConta({
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
     if (!nome.trim()) {
-      setErro('Dê um nome à conta.')
+      setErro('Dê um nome à carteira.')
       return
     }
     setErro(undefined)
@@ -131,7 +132,7 @@ function FormConta({
         nome: nome.trim(),
         saldo_inicial_centavos: negativo ? -saldoInicial : saldoInicial,
       })
-      mostrarAviso(original ? 'Conta atualizada.' : 'Conta criada.')
+      mostrarAviso(original ? 'Carteira atualizada.' : 'Carteira criada.')
       aoTerminar()
     } catch {
       // A mensagem aparece pelo estado de erro da mutation.
@@ -140,13 +141,13 @@ function FormConta({
 
   return (
     <form noValidate onSubmit={(e) => void salvar(e)} className="flex flex-col gap-4">
-      <h2 className="font-semibold">{original ? 'Editar conta' : 'Nova conta'}</h2>
+      <h2 className="font-semibold">{original ? 'Editar carteira' : 'Nova carteira'}</h2>
       {(salvarConta.error ?? excluir.error) && (
         <Alerta tom="desnecessario" icone={CircleAlert} anunciar>
           {excluir.error
             ? mensagemAoExcluir(
                 excluir.error,
-                'Esta conta tem lançamentos e não pode ser excluída.',
+                'Esta carteira tem lançamentos e não pode ser excluída.',
               )
             : mensagemDeErro(salvarConta.error)}
         </Alerta>
@@ -171,7 +172,7 @@ function FormConta({
           Saldo inicial negativo
         </label>
         <p className="text-sm text-secundario">
-          Quanto havia na conta antes dos lançamentos no app. O saldo atual é calculado a partir
+          Quanto havia na carteira antes dos lançamentos no app. O saldo atual é calculado a partir
           dele.
         </p>
       </div>
@@ -185,14 +186,14 @@ function FormConta({
       </div>
       {original && podeExcluir && (
         <ConfirmarAcao
-          rotulo="Excluir conta"
+          rotulo="Excluir carteira"
           icone={Trash2}
-          pergunta="Excluir esta conta? Só é possível se ela não tiver lançamentos."
+          pergunta="Excluir esta carteira? Só é possível se ela não tiver lançamentos."
           rotuloConfirmar="Excluir"
           carregando={excluir.isPending}
           aoConfirmar={() =>
             quandoTerminar(excluir.mutateAsync(original.conta_id), () => {
-              mostrarAviso('Conta excluída.')
+              mostrarAviso('Carteira excluída.')
               aoTerminar()
             })
           }

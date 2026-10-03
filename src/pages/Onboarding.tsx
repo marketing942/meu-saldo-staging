@@ -13,12 +13,14 @@ import { EstadoErro } from '@/components/ui/EstadoErro'
 import { dados } from '@/lib/dados/comum'
 import { contaPadrao, useContas } from '@/lib/dados/contas'
 import { usePerfil } from '@/lib/dados/perfil'
-import { mesAtual } from '@/lib/datas'
 import { mensagemDeErro } from '@/lib/erros'
 import { useUsuario } from '@/lib/sessao'
 import { supabase } from '@/lib/supabase'
 
-/** Primeiro acesso em 2 passos: nome e saldo inicial; depois as metas. Tudo pode ser pulado. */
+/**
+ * Primeiro acesso em 2 passos: nome e saldo inicial; depois a previsão mensal de
+ * desnecessários. Tudo pode ser pulado.
+ */
 export default function Onboarding() {
   const { id: uid } = useUsuario()
   const perfil = usePerfil()
@@ -29,8 +31,7 @@ export default function Onboarding() {
   const [passo, setPasso] = useState<1 | 2>(1)
   const [nome, setNome] = useState<string | null>(null)
   const [saldo, setSaldo] = useState(0)
-  const [metaDesnecessario, setMetaDesnecessario] = useState(0)
-  const [metaReceita, setMetaReceita] = useState(0)
+  const [previsaoDesnecessarios, setPrevisaoDesnecessarios] = useState(0)
   const [erroNome, setErroNome] = useState<string | undefined>()
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -65,7 +66,8 @@ export default function Onboarding() {
             ? {}
             : {
                 nome: nomeAtual.trim(),
-                meta_desnecessario_centavos: metaDesnecessario > 0 ? metaDesnecessario : null,
+                meta_desnecessario_centavos:
+                  previsaoDesnecessarios > 0 ? previsaoDesnecessarios : null,
               }),
         }),
       )
@@ -76,16 +78,6 @@ export default function Onboarding() {
             .update({ saldo_inicial_centavos: saldo })
             .eq('id', carteira.conta_id)
             .eq('user_id', uid),
-        )
-      }
-      if (!pular && metaReceita > 0) {
-        await dados(
-          supabase
-            .from('metas_receita')
-            .upsert(
-              { user_id: uid, mes_ref: mesAtual(), valor_meta_centavos: metaReceita },
-              { onConflict: 'user_id,mes_ref' },
-            ),
         )
       }
       await cliente.invalidateQueries()
@@ -119,7 +111,7 @@ export default function Onboarding() {
       <header>
         <p className="text-sm text-secundario">Passo {passo} de 2</p>
         <h1 className="text-2xl font-semibold">
-          {passo === 1 ? 'Vamos começar' : 'Defina suas metas'}
+          {passo === 1 ? 'Vamos começar' : 'Previsão de desnecessários'}
         </h1>
       </header>
 
@@ -152,28 +144,18 @@ export default function Onboarding() {
               </div>
             </>
           ) : (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <CampoValor
-                  rotulo="Meta mensal de gastos desnecessários (R$)"
-                  centavos={metaDesnecessario}
-                  aoMudar={setMetaDesnecessario}
-                />
-                <p className="text-sm text-secundario">
-                  Você recebe avisos aos 70%, 90% e 100% desse valor. Deixe em branco para não usar.
-                </p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <CampoValor
-                  rotulo="Meta de receita deste mês (R$)"
-                  centavos={metaReceita}
-                  aoMudar={setMetaReceita}
-                />
-                <p className="text-sm text-secundario">
-                  Quanto você quer receber neste mês. Dá para mudar a cada mês.
-                </p>
-              </div>
-            </>
+            <div className="flex flex-col gap-1.5">
+              <CampoValor
+                rotulo="Previsão mensal de desnecessários (R$)"
+                centavos={previsaoDesnecessarios}
+                aoMudar={setPrevisaoDesnecessarios}
+              />
+              <p className="text-sm text-secundario">
+                Quanto você prevê gastar por mês com o que não é necessário. Você recebe avisos aos
+                70%, 90% e 100% desse valor e pode mudar depois em Metas. Deixe zerado para não
+                usar.
+              </p>
+            </div>
           )}
           <div className="flex gap-2">
             {passo === 2 && (

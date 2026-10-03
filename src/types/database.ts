@@ -402,33 +402,6 @@ export type Database = {
           },
         ]
       }
-      metas_receita: {
-        Row: {
-          created_at: string
-          id: string
-          mes_ref: string
-          updated_at: string
-          user_id: string
-          valor_meta_centavos: number
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          mes_ref: string
-          updated_at?: string
-          user_id?: string
-          valor_meta_centavos: number
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          mes_ref?: string
-          updated_at?: string
-          user_id?: string
-          valor_meta_centavos?: number
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           created_at: string
@@ -692,6 +665,16 @@ export type Database = {
         }[]
       }
       hoje: { Args: Record<PropertyKey, never>; Returns: string }
+      limite_cartao: {
+        Args: { p_cartao_id: string }
+        Returns: {
+          cartao_id: string
+          disponivel_centavos: number
+          limite_centavos: number
+          percentual: number
+          usado_centavos: number
+        }[]
+      }
       mes_add: { Args: { p_mes: string; p_n: number }; Returns: string }
       mes_atual: { Args: Record<PropertyKey, never>; Returns: string }
       mes_de: { Args: { p_data: string }; Returns: string }
@@ -702,20 +685,6 @@ export type Database = {
         Returns: number
       }
       primeiro_dia: { Args: { p_mes: string }; Returns: string }
-      progresso_meta_receita: {
-        Args: { p_mes_ref: string }
-        Returns: {
-          batida: boolean
-          dias_restantes: number
-          falta_centavos: number
-          mes_ref: string
-          meta_centavos: number
-          meta_mes_anterior_centavos: number
-          percentual: number
-          por_dia_centavos: number
-          recebido_centavos: number
-        }[]
-      }
       resumo_mes: {
         Args: { p_mes_ref: string }
         Returns: {

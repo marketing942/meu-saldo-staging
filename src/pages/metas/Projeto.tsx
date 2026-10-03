@@ -54,7 +54,7 @@ export default function Projeto() {
   const [editando, setEditando] = useState(false)
 
   const voltar = (
-    <LinkBotao to="/metas?aba=projetos" variante="texto" icone={ArrowLeft} className="self-start">
+    <LinkBotao to="/metas" variante="texto" icone={ArrowLeft} className="self-start">
       Projetos
     </LinkBotao>
   )
@@ -76,7 +76,7 @@ export default function Projeto() {
         icone={FolderKanban}
         titulo="Projeto não encontrado"
         descricao="Ele pode ter sido excluído."
-        acao={<LinkBotao to="/metas?aba=projetos">Ver projetos</LinkBotao>}
+        acao={<LinkBotao to="/metas">Ver projetos</LinkBotao>}
       />
     )
   }
@@ -132,7 +132,7 @@ export default function Projeto() {
               carregando={alterar.isPending}
               aoConfirmar={() =>
                 quandoTerminar(alterar.mutateAsync({ id: p.id, excluir: true }), () => {
-                  void navegar('/metas?aba=projetos', { replace: true })
+                  void navegar('/metas', { replace: true })
                   mostrarAviso('Projeto excluído.', {
                     rotulo: 'Desfazer',
                     executar: desfazerCom(() => restaurarProjeto(uid, p.id)),

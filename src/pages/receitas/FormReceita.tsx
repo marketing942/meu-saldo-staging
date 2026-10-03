@@ -53,11 +53,11 @@ export default function FormReceita() {
           icone={HandCoins}
           titulo="Receita não encontrada"
           descricao="Ela pode ter sido excluída."
-          acao={<LinkBotao to="/receitas">Ver receitas</LinkBotao>}
+          acao={<LinkBotao to="/gastos?aba=receitas">Ver receitas</LinkBotao>}
         />
       ) : !contas.data || contas.data.length === 0 ? (
-        <Alerta tom="alerta" icone={CircleAlert} titulo="Nenhuma conta encontrada">
-          Cadastre uma conta em Configurações › Contas.
+        <Alerta tom="alerta" icone={CircleAlert} titulo="Nenhuma carteira encontrada">
+          Cadastre uma carteira em Configurações › Carteiras.
         </Alerta>
       ) : (
         <Formulario original={receita.data ?? null} contas={contas.data} />
@@ -79,7 +79,7 @@ function Formulario({
   original: Receita | null
   contas: { conta_id: string; nome: string }[]
 }) {
-  const voltar = useVoltar('/receitas')
+  const voltar = useVoltar('/gastos?aba=receitas')
   const { id: uid } = useUsuario()
   const mostrarAviso = useAvisos((a) => a.mostrar)
   const salvarReceita = useSalvarReceita()
@@ -158,7 +158,7 @@ function Formulario({
           erro={erros.data}
         />
         <CampoConta
-          rotulo="Entra na conta"
+          rotulo="Entra na carteira"
           contas={contas}
           valor={contaId}
           aoMudar={setContaEscolhida}

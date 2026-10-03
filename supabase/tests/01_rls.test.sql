@@ -14,7 +14,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(119);
+select plan(113);
 
 -- -----------------------------------------------------------------------------
 -- Auxiliares (existem só dentro desta transação)
@@ -37,7 +37,7 @@ create function tests.tabelas() returns text[]
 language sql immutable as $$
   select array[
     'profiles', 'contas', 'categorias', 'cartoes', 'gastos', 'receitas',
-    'faturas_pagas', 'dividas', 'dividas_pagamentos', 'metas_receita',
+    'faturas_pagas', 'dividas', 'dividas_pagamentos',
     'projetos', 'projeto_gastos', 'aprendizado_categoria'
   ];
 $$;
@@ -159,8 +159,6 @@ begin
   ) values ('Streaming', 'assinatura', 3990, 1, true, '2026-10', 'cartao', v_cartao);
 
   insert into public.dividas_pagamentos (divida_id, mes_ref) values (v_divida, '2026-10');
-
-  insert into public.metas_receita (mes_ref, valor_meta_centavos) values ('2026-10', 800000);
 
   insert into public.projetos (nome, orcamento_centavos, descontar_do_saldo)
   values ('Casamento', 300000, true)
@@ -352,7 +350,6 @@ select * from tests.isolamento('profiles',              'aaaaaaaa-0000-4000-8000
 select * from tests.isolamento('contas',                'aaaaaaaa-0000-4000-8000-000000000001', '42501', null);
 select * from tests.isolamento('categorias',            'aaaaaaaa-0000-4000-8000-000000000001', '42501', null);
 select * from tests.isolamento('cartoes',               'aaaaaaaa-0000-4000-8000-000000000001', '42501', null);
-select * from tests.isolamento('metas_receita',         'aaaaaaaa-0000-4000-8000-000000000001', '42501', null);
 select * from tests.isolamento('gastos',                'aaaaaaaa-0000-4000-8000-000000000001', '42501', '23503');
 select * from tests.isolamento('receitas',              'aaaaaaaa-0000-4000-8000-000000000001', '42501', '23503');
 select * from tests.isolamento('faturas_pagas',         'aaaaaaaa-0000-4000-8000-000000000001', '42501', '23503');
@@ -408,6 +405,10 @@ select results_eq(
 select is_empty(
   format($$select * from public.fatura_cartao(%L, '2026-10')$$, tests.ref('cartao_a')),
   'fatura_cartao: cartão de outro usuário não retorna nada'
+);
+select is_empty(
+  format($$select * from public.limite_cartao(%L)$$, tests.ref('cartao_a')),
+  'limite_cartao: cartão de outro usuário não retorna nada'
 );
 select is(
   public.total_fatura(tests.ref('cartao_a'), '2026-10'),

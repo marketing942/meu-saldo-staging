@@ -5,7 +5,7 @@
 export const MARCA = {
   nome: 'Finanças',
   nomeCurto: 'Finanças',
-  descricao: 'Organize seus gastos, dívidas e metas do mês.',
+  descricao: 'Organize seus gastos, contas a pagar e metas do mês.',
   idioma: 'pt-BR',
   /** E-mail de contato citado nos Termos e na Política de privacidade (preencha antes de produção). */
   emailContato: '',

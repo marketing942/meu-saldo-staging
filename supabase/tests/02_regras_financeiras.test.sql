@@ -3,7 +3,7 @@
 -- "Hoje" fixado em 03/10/2026 (app.hoje) para os resultados serem estáveis.
 --
 -- Cenário da usuária Carla (valores em centavos):
---   Carteira: saldo inicial 500000. Meta de desnecessários: 100000.
+--   Carteira: saldo inicial 500000. Previsão de desnecessários: 100000.
 --   Cartão: limite 200000, fecha dia 10, vence dia 20.
 --   Receita 50000 em 01/10.
 --   Gastos: Pix 10000 (03/10, necessário) · dinheiro 75000 (01/10, desnecessário)
@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(68);
+select plan(74);
 
 -- Auxiliares ------------------------------------------------------------------
 
@@ -143,9 +143,6 @@ insert into public.projeto_gastos (projeto_id, descricao, valor_centavos, data)
 values ('c0000000-0000-4000-8000-0000000000e1', 'Passagem', 3000, '2026-10-02'),
        ('c0000000-0000-4000-8000-0000000000e2', 'Buffet', 99900, '2026-10-02');
 
-insert into public.metas_receita (mes_ref, valor_meta_centavos)
-values ('2026-09', 180000), ('2026-10', 200000);
-
 -- -----------------------------------------------------------------------------
 -- Cartão e fatura (regra 3)
 -- -----------------------------------------------------------------------------
@@ -259,6 +256,95 @@ select results_eq(
 );
 
 -- -----------------------------------------------------------------------------
+-- Limite do cartão (limite_cartao)
+-- Usado agora: parcelas 2/3 e 3/3 da Geladeira (20000) + Farmácia (5000).
+-- A fatura de outubro (parcela 1/3 + Streaming) está paga e não conta.
+-- No fim da seção tudo volta ao estado anterior, para não afetar o resto.
+-- -----------------------------------------------------------------------------
+
+select results_eq(
+  $$select limite_centavos, usado_centavos, disponivel_centavos, percentual
+    from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')$$,
+  $$values (200000::bigint, 25000::bigint, 175000::bigint, 12.50::numeric)$$,
+  'limite: parcelas futuras contam e a fatura já paga não conta'
+);
+select is(
+  (select limite_usado_centavos from public.faturas_do_mes('2026-10')
+    where cartao_id = 'c0000000-0000-4000-8000-0000000000c1'),
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  'faturas_do_mes mostra o mesmo limite usado de limite_cartao'
+);
+
+-- Compra à vista em 15/10 (entra na fatura de novembro).
+insert into public.gastos (id, valor_centavos, descricao, data, origem, cartao_id, tipo)
+values ('c0000000-0000-4000-8000-000000000006', 40000, 'TV', '2026-10-15', 'cartao',
+        'c0000000-0000-4000-8000-0000000000c1', 'desnecessario');
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  65000::bigint,
+  'limite: compra à vista consome o valor total'
+);
+
+-- Compra parcelada em 4x a partir de 15/10 (faturas de novembro a fevereiro).
+insert into public.gastos (valor_centavos, descricao, data, origem, cartao_id, tipo,
+                           parcela_atual, total_parcelas, grupo_parcelas)
+select p.valor_centavos, 'Celular', p.data, 'cartao', 'c0000000-0000-4000-8000-0000000000c1',
+       'necessario', p.parcela, 4, 'c0000000-0000-4000-8000-00000000009b'
+from public.gerar_parcelas(80000, '2026-10-15', 4) p;
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  145000::bigint,
+  'limite: compra parcelada consome todas as parcelas, inclusive as de meses futuros'
+);
+
+-- Excluir a compra (exclusão lógica) e desfazer.
+update public.gastos set deleted_at = now()
+ where grupo_parcelas = 'c0000000-0000-4000-8000-00000000009b';
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  65000::bigint,
+  'limite: excluir a compra devolve o limite na hora'
+);
+update public.gastos set deleted_at = null
+ where grupo_parcelas = 'c0000000-0000-4000-8000-00000000009b';
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  145000::bigint,
+  'limite: desfazer a exclusão volta a consumir o limite'
+);
+
+-- Conta a pagar recorrente no cartão: a parcela de novembro entra na fatura de novembro.
+insert into public.dividas_pagamentos (divida_id, mes_ref)
+values ('c0000000-0000-4000-8000-0000000000d2', '2026-11');
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  150000::bigint,
+  'limite: conta a pagar no cartão consome o valor da parcela do mês'
+);
+
+-- Fatura de novembro paga: Geladeira 2/3 + Farmácia + TV + Celular 1/4 + Streaming = 80000.
+insert into public.faturas_pagas (cartao_id, mes_ref, conta_id)
+values ('c0000000-0000-4000-8000-0000000000c1', '2026-11', (select id from public.contas));
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  70000::bigint,
+  'limite: marcar a fatura como paga devolve o valor dela ao limite'
+);
+
+delete from public.faturas_pagas
+ where cartao_id = 'c0000000-0000-4000-8000-0000000000c1' and mes_ref = '2026-11';
+delete from public.dividas_pagamentos
+ where divida_id = 'c0000000-0000-4000-8000-0000000000d2' and mes_ref = '2026-11';
+delete from public.gastos
+ where id = 'c0000000-0000-4000-8000-000000000006'
+    or grupo_parcelas = 'c0000000-0000-4000-8000-00000000009b';
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  25000::bigint,
+  'limite: desfazer o pagamento da fatura e remover as compras volta ao valor inicial'
+);
+
+-- -----------------------------------------------------------------------------
 -- Saldo (regra 1) sem dupla contagem (regra 4) e projetos isolados (regra 9)
 -- 500000 + 50000 − 10000 − 75000 − 15000 (fatura) − 30000 (aluguel) − 3000 (Viagem)
 -- -----------------------------------------------------------------------------
@@ -312,26 +398,6 @@ select results_eq(
     from public.resumo_mes('2026-09')$$,
   $$values ('passado'::text, 500000::bigint, 0, true)$$,
   'setembro (realizado): sem dias restantes'
-);
-
--- -----------------------------------------------------------------------------
--- Meta de receita (regra 8)
--- -----------------------------------------------------------------------------
-
-select results_eq(
-  $$select meta_centavos, meta_mes_anterior_centavos, recebido_centavos, percentual,
-           falta_centavos, batida, dias_restantes, por_dia_centavos
-    from public.progresso_meta_receita('2026-10')$$,
-  $$values (200000::bigint, 180000::bigint, 50000::bigint, 25.00::numeric,
-            150000::bigint, false, 29, 5173::bigint)$$,
-  'meta de outubro: 25%, faltam 150000, ~5173 por dia em 29 dias'
-);
-select results_eq(
-  $$select meta_centavos is null, meta_mes_anterior_centavos, recebido_centavos, batida,
-           dias_restantes is null
-    from public.progresso_meta_receita('2026-11')$$,
-  $$values (true, 200000::bigint, 0::bigint, false, true)$$,
-  'novembro sem meta: oferece repetir a de outubro'
 );
 
 -- -----------------------------------------------------------------------------
@@ -468,14 +534,16 @@ select is(
   '23514', 'parcelas já pagas precisa ser menor que o total'
 );
 select is(
-  tests.estado($$insert into public.metas_receita (mes_ref, valor_meta_centavos)
-                 values ('2026-13', 1000)$$),
+  tests.estado($$insert into public.faturas_pagas (cartao_id, mes_ref, conta_id)
+                 values ('c0000000-0000-4000-8000-0000000000c1', '2026-13',
+                         (select id from public.contas))$$),
   '23514', 'mês fora do formato AAAA-MM é rejeitado'
 );
 select is(
-  tests.estado($$insert into public.metas_receita (mes_ref, valor_meta_centavos)
-                 values ('2026-10', 1000)$$),
-  '23505', 'uma meta de receita por mês'
+  tests.estado($$insert into public.faturas_pagas (cartao_id, mes_ref, conta_id)
+                 values ('c0000000-0000-4000-8000-0000000000c1', '2026-10',
+                         (select id from public.contas))$$),
+  '23505', 'uma fatura paga por cartão e mês'
 );
 
 insert into public.aprendizado_categoria (termo, categoria_id, tipo)
@@ -484,16 +552,6 @@ select is(
   (select termo from public.aprendizado_categoria),
   'pão de queijo',
   'aprendizado normaliza o termo'
-);
-
--- Meta batida
-insert into public.receitas (valor_centavos, descricao, data, conta_id)
-values (160000, 'Freela', '2026-10-02', (select id from public.contas));
-select results_eq(
-  $$select recebido_centavos, percentual, falta_centavos, batida, por_dia_centavos is null
-    from public.progresso_meta_receita('2026-10')$$,
-  $$values (210000::bigint, 105.00::numeric, 0::bigint, true, true)$$,
-  'meta batida a partir de 100%'
 );
 
 -- Ritmo com dízima (40000 / 3 por dia): faltam 40000, exatamente 3 dias.

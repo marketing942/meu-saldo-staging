@@ -5,12 +5,13 @@ import { cn } from '@/lib/cn'
 
 import { Icone } from './Icone'
 
-type Tom = 'destaque' | 'necessario' | 'alerta' | 'desnecessario'
+type Tom = 'destaque' | 'necessario' | 'alerta' | 'forte' | 'desnecessario'
 
 const tons: Record<Tom, string> = {
   destaque: 'bg-destaque/10 border-destaque/25 text-texto [--cor-icone:var(--destaque)]',
   necessario: 'bg-necessario/10 border-necessario/25 text-texto [--cor-icone:var(--necessario)]',
   alerta: 'bg-alerta/12 border-alerta/30 text-texto [--cor-icone:var(--alerta)]',
+  forte: 'bg-forte/12 border-forte/30 text-texto [--cor-icone:var(--forte)]',
   desnecessario:
     'bg-desnecessario/10 border-desnecessario/25 text-texto [--cor-icone:var(--desnecessario)]',
 }
