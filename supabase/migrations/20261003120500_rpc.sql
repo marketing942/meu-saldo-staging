@@ -658,26 +658,56 @@ $$;
 -- Permissões das funções -----------------------------------------------------
 -- Por padrão o Postgres dá EXECUTE a PUBLIC; aqui só `authenticated` (e o
 -- service_role) podem chamar. Funções de gatilho não são chamáveis pela API.
+-- A lista é fechada: só as funções criadas por estas migrations são alteradas.
+-- Funções que já existiam no schema (ex.: rls_auto_enable, do Supabase) ficam
+-- como estão. Se alguma assinatura não existir, o cast para regprocedure falha
+-- e a migration é abortada, em vez de pular a função em silêncio.
 
 do $$
 declare
   f regprocedure;
 begin
-  for f in
-    select p.oid::regprocedure
-    from pg_proc p
-    where p.pronamespace = 'public'::regnamespace
-      and p.prorettype <> 'trigger'::regtype
+  -- Funções chamáveis (01 e 06).
+  foreach f in array array[
+    'public.hoje()',
+    'public.mes_de(date)',
+    'public.mes_atual()',
+    'public.primeiro_dia(text)',
+    'public.ultimo_dia(text)',
+    'public.dias_no_mes(text)',
+    'public.mes_add(text, integer)',
+    'public.mes_diff(text, text)',
+    'public.data_no_mes(text, integer)',
+    'public.mes_fatura(date, integer)',
+    'public.fechamento_fatura(text, integer)',
+    'public.vencimento_fatura(text, integer, integer)',
+    'public.gerar_parcelas(bigint, date, integer)',
+    'public.numero_parcela_divida(integer, text, text)',
+    'public.total_fatura(uuid, text)',
+    'public.saldo_contas(date)',
+    'public.saldo_total(date)',
+    'public.faturas_do_mes(text, uuid)',
+    'public.fatura_cartao(uuid, text)',
+    'public.dividas_do_mes(text)',
+    'public.resumo_mes(text)',
+    'public.progresso_meta_receita(text)',
+    'public.totais_projeto(uuid)'
+  ]::regprocedure[]
   loop
     execute format('revoke all on function %s from public, anon', f);
     execute format('grant execute on function %s to authenticated, service_role', f);
   end loop;
 
-  for f in
-    select p.oid::regprocedure
-    from pg_proc p
-    where p.pronamespace = 'public'::regnamespace
-      and p.prorettype = 'trigger'::regtype
+  -- Funções de gatilho (01, 03 e 05).
+  foreach f in array array[
+    'public.definir_updated_at()',
+    'public.gastos_preparar()',
+    'public.dividas_preparar()',
+    'public.dividas_pagamentos_preparar()',
+    'public.projetos_preparar()',
+    'public.aprendizado_categoria_preparar()',
+    'public.handle_new_user()'
+  ]::regprocedure[]
   loop
     execute format('revoke all on function %s from public, anon, authenticated', f);
   end loop;
