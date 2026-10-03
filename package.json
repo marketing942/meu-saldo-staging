@@ -16,6 +16,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "test:db": "scripts/db-test.sh",
     "gen:types": "scripts/gen-types.sh",
     "gen:pwa-assets": "pwa-assets-generator"
@@ -36,6 +37,7 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "9.39.5",
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",

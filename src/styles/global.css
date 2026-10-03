@@ -24,12 +24,14 @@
   --fundo: #f3f4f6;
   --card: #ffffff;
   --texto: #1b2230;
-  --secundario: #6b7280;
+  /* Secundário, necessário e desnecessário com contraste mínimo de 4,5:1 (WCAG AA)
+     sobre o fundo e os cards, porque também aparecem como texto. */
+  --secundario: #666d7a;
   --borda: #e6e8ec;
   --abas: #ffffff;
   --destaque: #2e4a7a;
-  --necessario: #3c8d6a;
-  --desnecessario: #c65468;
+  --necessario: #34795b;
+  --desnecessario: #be3f56;
   --alerta: #c98f2e;
   /* Texto sobre o botão principal (cor de destaque). */
   --sobre-destaque: #ffffff;
@@ -114,6 +116,8 @@
   .valor {
     font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
+    /* "R$ 1.234,56" nunca quebra entre o símbolo e o número. */
+    white-space: nowrap;
   }
 
   .fonte-display {

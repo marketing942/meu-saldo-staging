@@ -45,6 +45,7 @@ Sem as variáveis de ambiente, o app abre uma tela explicando o que falta.
 | `npm run format` / `format:check` | Prettier                                                                                           |
 | `npm run typecheck`               | TypeScript sem gerar arquivos                                                                      |
 | `npm test`                        | Vitest: funções puras (datas, dinheiro e regras financeiras)                                       |
+| `npm run test:e2e`                | Playwright: jornadas completas e acessibilidade (axe), com um Supabase falso em memória            |
 | `npm run test:db`                 | Sobe um Postgres do Supabase no Docker, aplica as migrations e roda os testes pgTAP (RLS e regras) |
 | `npm run gen:types`               | Regenera `src/types/database.ts` a partir das migrations (`supabase gen types`)                    |
 | `npm run gen:pwa-assets`          | Regenera os ícones do PWA a partir de `public/icone.svg`                                           |
@@ -62,8 +63,10 @@ src/
   stores/         estado de interface (Zustand)
   styles/         tokens de cor, fontes e base do Tailwind
   types/          tipos gerados do banco (não editar à mão)
+e2e/              testes Playwright e o Supabase falso usado por eles
 supabase/
   migrations/     schema, RLS, gatilhos e RPCs
+  functions/      Edge Function excluir-conta (Deno)
   tests/          testes pgTAP (RLS com dois usuários e regras financeiras)
 scripts/          testes do banco e geração de tipos
 ```
@@ -115,6 +118,16 @@ npx supabase db push
 
 Confira em **Table Editor** que as tabelas aparecem com o selo "RLS enabled". Se quiser conferir antes, rode os testes do banco localmente com `npm run test:db`.
 
+### 2.1 Publicar a Edge Function de excluir conta
+
+"Excluir minha conta" (Configurações) chama a Edge Function `supabase/functions/excluir-conta`. Ela usa a chave `service_role`, que o Supabase injeta sozinho no ambiente das funções (não é preciso cadastrar segredo). Em cada projeto:
+
+```bash
+npx supabase functions deploy excluir-conta --project-ref <ref>
+```
+
+Sem a função publicada, o restante do app funciona normalmente; só a exclusão de conta mostra "Não foi possível excluir a conta agora".
+
 ### 3. Configurar a autenticação (em cada projeto)
 
 Em **Authentication**:
@@ -126,6 +139,7 @@ Em **Authentication**:
      - produção: `https://seu-dominio.com.br/**`
      - staging: `https://<projeto>-git-<branch>-<time>.vercel.app/**` ou, para todos os previews, `https://*-<time>.vercel.app/**`
      - local (só no staging): `http://localhost:5173/**`
+   - O `/**` cobre os links de confirmação de cadastro (voltam para `/`) e de recuperação de senha (voltam para `/nova-senha`).
 3. **Rate Limits**: mantenha os limites padrão.
 4. **SMTP** (produção): configure um SMTP próprio (Resend, Amazon SES, Postmark...). O envio padrão do Supabase só entrega e-mails para membros do time e tem limite muito baixo, o que impede cadastro e recuperação de senha de usuários reais.
 
@@ -162,6 +176,7 @@ Se usar um domínio próprio no Supabase (custom domain) ou um Sentry fora de `*
 O workflow `.github/workflows/ci.yml` roda em todo push e PR:
 
 - **app**: lint, formatação, tipos, testes unitários e build;
+- **e2e**: Playwright com as jornadas principais (cadastro, primeiro acesso, gastos, cartões e faturas, dívidas, metas, projetos, configurações, excluir conta) e checagem de acessibilidade com axe nos temas claro e escuro. Usa um Supabase falso em memória, sem rede nem segredos;
 - **banco**: aplica as migrations num Postgres do Supabase, roda os testes pgTAP (RLS com dois usuários e regras financeiras) e confere se `src/types/database.ts` está em dia com as migrations.
 
 ## Trocar o nome do app
@@ -183,4 +198,6 @@ Sem rastreadores nem analytics de terceiros. O Sentry é opcional e configurado 
 6. Metas (receita e projetos), alertas, lembrete e Configurações (inclui excluir conta)
 7. Testes ponta a ponta (Playwright), acessibilidade, dados de exemplo e checklist de deploy
 
-As fases 1 e 2 estão concluídas. As telas das próximas fases já têm rota e mostram "Esta tela chega em breve".
+Todas as fases estão concluídas. Antes de publicar, siga o [checklist de deploy](docs/CHECKLIST-DEPLOY.md).
+
+O que ficou de fora desta versão (decisões conscientes): modo offline, notificação push do lembrete diário (o lembrete aparece no Início), exportação de dados e gráficos de análise.
