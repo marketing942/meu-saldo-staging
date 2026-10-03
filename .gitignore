@@ -1,0 +1,23 @@
+# Dependências e build
+node_modules
+dist
+dev-dist
+*.tsbuildinfo
+coverage
+playwright-report
+test-results
+
+# Supabase CLI
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Ambiente
+.env
+.env.*
+!.env.example
+.vercel
+
+# Sistema
+.DS_Store
+*.log

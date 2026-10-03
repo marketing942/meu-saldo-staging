@@ -1,0 +1,184 @@
+@import 'tailwindcss';
+
+/* -----------------------------------------------------------------------------
+ * Fontes
+ * Figtree (400/500/600) vem do pacote @fontsource (servida pelo próprio domínio).
+ * Hero Fest: só no mês do topo e nos rótulos das abas. Tem apenas peso regular e
+ * não tem os caracteres $ / · • — nunca usar em valores.
+ * -------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Hero Fest';
+  src: url('/fonts/Hero_Fest.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* -----------------------------------------------------------------------------
+ * Tokens de cor (claro / escuro)
+ * Escuro automático por prefers-color-scheme, com escolha manual via
+ * <html data-tema="claro|escuro"> (Configurações).
+ * -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --fundo: #f3f4f6;
+  --card: #ffffff;
+  --texto: #1b2230;
+  --secundario: #6b7280;
+  --borda: #e6e8ec;
+  --abas: #ffffff;
+  --destaque: #2e4a7a;
+  --necessario: #3c8d6a;
+  --desnecessario: #c65468;
+  --alerta: #c98f2e;
+  /* Texto sobre o botão principal (cor de destaque). */
+  --sobre-destaque: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    color-scheme: dark;
+    --fundo: #111418;
+    --card: #1a1e24;
+    --texto: #eceef1;
+    --secundario: #98a0ab;
+    --borda: #2a2f37;
+    --abas: #16191e;
+    --destaque: #8fa9d6;
+    --necessario: #6db896;
+    --desnecessario: #e08a9a;
+    --alerta: #ddb25a;
+    --sobre-destaque: #111418;
+  }
+}
+
+:root[data-tema='escuro'] {
+  color-scheme: dark;
+  --fundo: #111418;
+  --card: #1a1e24;
+  --texto: #eceef1;
+  --secundario: #98a0ab;
+  --borda: #2a2f37;
+  --abas: #16191e;
+  --destaque: #8fa9d6;
+  --necessario: #6db896;
+  --desnecessario: #e08a9a;
+  --alerta: #ddb25a;
+  --sobre-destaque: #111418;
+}
+
+/* Tokens expostos como utilitários do Tailwind: bg-card, text-secundario, border-borda... */
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-card: var(--card);
+  --color-texto: var(--texto);
+  --color-secundario: var(--secundario);
+  --color-borda: var(--borda);
+  --color-abas: var(--abas);
+  --color-destaque: var(--destaque);
+  --color-necessario: var(--necessario);
+  --color-desnecessario: var(--desnecessario);
+  --color-alerta: var(--alerta);
+  --color-sobre-destaque: var(--sobre-destaque);
+}
+
+@theme {
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Hero Fest', 'Figtree', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 16px;
+  --radius-campo: 12px;
+  --radius-botao: 14px;
+
+  --spacing-toque: 44px;
+  --container-app: 430px;
+}
+
+/* -----------------------------------------------------------------------------
+ * Base
+ * -------------------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-fundo font-sans text-texto antialiased;
+    min-height: 100dvh;
+    font-weight: 400;
+  }
+
+  /* Valores em R$ e números: Figtree, algarismos de largura fixa. */
+  .valor {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fonte-display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-synthesis: none;
+    letter-spacing: 0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--destaque);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--destaque) 25%, transparent);
+  }
+
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Teclado numérico sem setas de incremento. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* Acessibilidade: respeita quem prefere menos movimento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes pulsar {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@utility animate-pulsar {
+  animation: pulsar 1.6s ease-in-out infinite;
+}
+
+/* Áreas seguras (notch e barra de gestos) */
+@utility pt-seguro {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-seguro {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility px-seguro {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
