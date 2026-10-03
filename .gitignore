@@ -1,0 +1,9 @@
+# Supabase CLI
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Ambiente
+.env
+.env.*
+!.env.example
