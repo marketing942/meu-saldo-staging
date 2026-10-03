@@ -9,12 +9,15 @@ import tseslint from 'typescript-eslint'
 export default defineConfig([
   globalIgnores([
     'dist',
+    'dist-e2e',
     'dev-dist',
     'coverage',
     'playwright-report',
     'test-results',
     'public',
     'src/types/database.ts',
+    // Edge Functions rodam em Deno, fora do projeto TypeScript do front.
+    'supabase/functions',
   ]),
   {
     files: ['**/*.{ts,tsx}'],

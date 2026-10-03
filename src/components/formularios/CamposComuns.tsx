@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Selecao } from '@/components/ui/Selecao'
+import { CORES } from '@/lib/dados/categorias'
 
 /** Grupo de pílulas com legenda (escolha única). */
 export function GrupoEscolha({
@@ -30,11 +31,13 @@ export function CampoConta({
   valor,
   aoMudar,
   rotulo,
+  desabilitado = false,
 }: {
   contas: readonly { conta_id: string; nome: string }[]
   valor: string
   aoMudar: (contaId: string) => void
   rotulo: string
+  desabilitado?: boolean
 }) {
   if (contas.length === 1) {
     return (
@@ -44,12 +47,55 @@ export function CampoConta({
     )
   }
   return (
-    <Selecao rotulo={rotulo} value={valor} onChange={(e) => aoMudar(e.target.value)}>
+    <Selecao
+      rotulo={rotulo}
+      value={valor}
+      onChange={(e) => aoMudar(e.target.value)}
+      disabled={desabilitado}
+    >
       {contas.map((conta) => (
         <option key={conta.conta_id} value={conta.conta_id}>
           {conta.nome}
         </option>
       ))}
     </Selecao>
+  )
+}
+
+/** Escolha de cor em bolinhas (paleta fixa, aceita pelo banco). */
+export function SeletorCor({
+  valor,
+  aoMudar,
+  legenda = 'Cor',
+}: {
+  valor: string
+  aoMudar: (cor: string) => void
+  legenda?: string
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1.5 text-sm font-medium">{legenda}</legend>
+      <div className="flex flex-wrap gap-1">
+        {CORES.map((cor) => {
+          const escolhida = valor.toUpperCase() === cor.valor
+          return (
+            <button
+              key={cor.valor}
+              type="button"
+              aria-label={cor.nome}
+              aria-pressed={escolhida}
+              onClick={() => aoMudar(cor.valor)}
+              className="inline-flex size-11 items-center justify-center rounded-full"
+            >
+              <span
+                aria-hidden
+                className={`size-7 rounded-full ${escolhida ? 'ring-2 ring-texto ring-offset-2 ring-offset-card' : ''}`}
+                style={{ backgroundColor: cor.valor }}
+              />
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }

@@ -8,11 +8,13 @@ export function CampoValor({
   centavos,
   aoMudar,
   erro,
+  desabilitado = false,
 }: {
   rotulo?: string
   centavos: Centavos
   aoMudar: (centavos: Centavos) => void
   erro?: string
+  desabilitado?: boolean
 }) {
   return (
     <Campo
@@ -24,6 +26,7 @@ export function CampoValor({
       value={centavos > 0 ? formatarCentavosParaCampo(centavos) : ''}
       onChange={(e) => aoMudar(centavosDeDigitos(e.target.value))}
       erro={erro}
+      disabled={desabilitado}
     />
   )
 }

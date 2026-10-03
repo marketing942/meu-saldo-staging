@@ -7,6 +7,8 @@ export const MARCA = {
   nomeCurto: 'Finanças',
   descricao: 'Organize seus gastos, dívidas e metas do mês.',
   idioma: 'pt-BR',
+  /** E-mail de contato citado nos Termos e na Política de privacidade (preencha antes de produção). */
+  emailContato: '',
   /** Cores do fundo, usadas na barra do navegador e na tela de abertura do PWA. */
   corFundoClaro: '#F3F4F6',
   corFundoEscuro: '#111418',

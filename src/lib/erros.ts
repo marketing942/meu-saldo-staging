@@ -41,6 +41,12 @@ export function mensagemDeErro(erro: unknown): string {
   return 'Algo deu errado. Tente de novo em instantes.'
 }
 
+/** Ao excluir um item que ainda tem lançamentos ligados (chave estrangeira). */
+export function mensagemAoExcluir(erro: unknown, comLancamentos: string): string {
+  if (temCodigo(erro) && erro.code === '23503') return comLancamentos
+  return mensagemDeErro(erro)
+}
+
 /** Mensagens para erros do Supabase Auth (entrar, cadastrar, sair). */
 export function mensagemDeErroAuth(erro: unknown): string {
   if (ehErroDeRede(erro)) return mensagemDeErro(erro)

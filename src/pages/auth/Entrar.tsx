@@ -80,6 +80,12 @@ export default function Entrar() {
           <Botao type="submit" larguraTotal carregando={enviando}>
             Entrar
           </Botao>
+          <Link
+            to="/esqueci-senha"
+            className="self-center py-2 text-sm font-medium text-destaque underline-offset-4 hover:underline"
+          >
+            Esqueci minha senha
+          </Link>
         </form>
       </Card>
 

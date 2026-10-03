@@ -14,16 +14,20 @@ import { BotaoMostrarSenha, CabecalhoAuth } from './comum'
 import { SENHA_MINIMO, emailValido } from './validacao'
 
 interface Erros {
+  nome?: string
   email?: string
   senha?: string
   confirmacao?: string
+  termos?: string
 }
 
 export default function Cadastro() {
+  const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [aceitouTermos, setAceitouTermos] = useState(false)
   const [erros, setErros] = useState<Erros>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -32,23 +36,26 @@ export default function Cadastro() {
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
     const novosErros: Erros = {
+      nome: nome.trim() ? undefined : 'Diga como quer ser chamado(a).',
       email: emailValido(email) ? undefined : 'Digite um e-mail válido.',
       senha:
         senha.length >= SENHA_MINIMO
           ? undefined
           : `A senha precisa ter pelo menos ${SENHA_MINIMO} caracteres.`,
       confirmacao: confirmacao === senha ? undefined : 'As senhas não são iguais.',
+      termos: aceitouTermos ? undefined : 'Para criar a conta, aceite os termos e a política.',
     }
     setErros(novosErros)
     setErroGeral(null)
-    if (novosErros.email || novosErros.senha || novosErros.confirmacao) return
+    if (Object.values(novosErros).some(Boolean)) return
 
     setEnviando(true)
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password: senha,
       // Link de confirmação volta para este endereço (precisa estar nas Redirect URLs).
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      // O nome vai para o perfil pelo gatilho handle_new_user (raw_user_meta_data.nome).
+      options: { emailRedirectTo: `${window.location.origin}/`, data: { nome: nome.trim() } },
     })
     setEnviando(false)
     if (error) {
@@ -101,6 +108,15 @@ export default function Cadastro() {
             </Alerta>
           )}
           <Campo
+            rotulo="Nome"
+            autoComplete="name"
+            placeholder="Como quer ser chamado(a)"
+            maxLength={80}
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            erro={erros.nome}
+          />
+          <Campo
             rotulo="E-mail"
             type="email"
             autoComplete="email"
@@ -132,6 +148,29 @@ export default function Cadastro() {
             onChange={(e) => setConfirmacao(e.target.value)}
             erro={erros.confirmacao}
           />
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={aceitouTermos}
+                onChange={(e) => setAceitouTermos(e.target.checked)}
+                aria-invalid={erros.termos ? true : undefined}
+                className="mt-0.5 size-5 shrink-0 accent-[var(--destaque)]"
+              />
+              <span>
+                Li e aceito os{' '}
+                <Link to="/termos" className="font-medium text-destaque underline">
+                  termos de uso
+                </Link>{' '}
+                e a{' '}
+                <Link to="/privacidade" className="font-medium text-destaque underline">
+                  política de privacidade
+                </Link>
+                .
+              </span>
+            </label>
+            {erros.termos && <p className="text-sm text-desnecessario">{erros.termos}</p>}
+          </div>
           <Botao type="submit" larguraTotal carregando={enviando}>
             Criar conta
           </Botao>

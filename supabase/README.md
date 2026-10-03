@@ -14,6 +14,14 @@
 
 Aplicar em um projeto remoto: `supabase link --project-ref <ref>` e depois `supabase db push`.
 
+## Edge Functions
+
+| Função                    | O que faz                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions/excluir-conta` | Apaga o usuário que fez a chamada (identificado pelo token, nunca por um id vindo do cliente); os dados saem em cascata. Usa a service_role injetada pelo Supabase. |
+
+Publicar: `supabase functions deploy excluir-conta --project-ref <ref>`.
+
 Migrations já aplicadas não são editadas: toda mudança entra num arquivo novo. Depois de mudar o schema, rode `npm run gen:types` para atualizar `src/types/database.ts`. O CI falha se os tipos estiverem desatualizados.
 
 ## Testes (pgTAP)
