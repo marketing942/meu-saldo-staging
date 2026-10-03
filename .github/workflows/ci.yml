@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: Lint, tipos, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Testes unitários
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Valores fictícios: o build não acessa o Supabase.
+          VITE_SUPABASE_URL: https://ci-build.supabase.co
+          VITE_SUPABASE_ANON_KEY: chave-anon-ficticia-usada-so-no-build-do-ci
+          VITE_APP_AMBIENTE: producao
+
+  banco:
+    name: Migrations, RLS e tipos do banco
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Instalar psql e pg_prove
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client libtap-parser-sourcehandler-pgtap-perl
+
+      - name: Migrations + testes pgTAP (RLS e regras financeiras)
+        run: npm run test:db
+
+      - name: Tipos gerados em dia com as migrations
+        run: npm run gen:types -- --check

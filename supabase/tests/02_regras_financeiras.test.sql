@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(67);
+select plan(68);
 
 -- Auxiliares ------------------------------------------------------------------
 
@@ -494,6 +494,27 @@ select results_eq(
     from public.progresso_meta_receita('2026-10')$$,
   $$values (210000::bigint, 105.00::numeric, 0::bigint, true, true)$$,
   'meta batida a partir de 100%'
+);
+
+-- Ritmo com dízima (40000 / 3 por dia): faltam 40000, exatamente 3 dias.
+-- A fórmula anterior (dividir pelo ritmo arredondado) dava 4. Igual ao TypeScript.
+reset role;
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                        raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values ('00000000-0000-0000-0000-000000000000', 'dddddddd-0000-4000-8000-000000000001',
+        'authenticated', 'authenticated', 'davi@teste.local', '',
+        '{"provider":"email","providers":["email"]}', '{"nome":"Davi"}', now(), now());
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'dddddddd-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"sub":"dddddddd-0000-4000-8000-000000000001","role":"authenticated"}', true);
+update public.profiles set meta_desnecessario_centavos = 80000;
+insert into public.gastos (valor_centavos, descricao, data, origem, conta_id, tipo)
+values (40000, 'Jantar', '2026-10-01', 'pix', (select id from public.contas), 'desnecessario');
+select results_eq(
+  $$select desnecessario_projecao_centavos, desnecessario_dias_para_estourar
+    from public.resumo_mes('2026-10')$$,
+  $$values (413333::bigint, 3)$$,
+  'projeção com ritmo em dízima: exatamente 3 dias, sem dia a mais'
 );
 
 select * from finish();

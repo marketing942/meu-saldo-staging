@@ -2,16 +2,19 @@
 
 ## Migrations
 
-| Arquivo | Conteúdo |
-| --- | --- |
-| `20261003120000_base.sql` | Tipos enumerados e funções puras de datas, meses, fatura e parcelas |
-| `20261003120100_tabelas.sql` | Tabelas, constraints e índices |
-| `20261003120200_gatilhos.sql` | Gatilhos de integridade (fatura da compra, retrato do pagamento, recálculo de parcelas) |
-| `20261003120300_rls.sql` | RLS em todas as tabelas e permissões |
-| `20261003120400_novo_usuario.sql` | `handle_new_user`: perfil, conta "Carteira" e categorias padrão |
-| `20261003120500_rpc.sql` | RPCs: `saldo_total`, `saldo_contas`, `resumo_mes`, `dividas_do_mes`, `faturas_do_mes`, `fatura_cartao`, `total_fatura`, `progresso_meta_receita`, `totais_projeto` |
+| Arquivo                                      | Conteúdo                                                                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `20261003120000_base.sql`                    | Tipos enumerados e funções puras de datas, meses, fatura e parcelas                                                                                                |
+| `20261003120100_tabelas.sql`                 | Tabelas, constraints e índices                                                                                                                                     |
+| `20261003120200_gatilhos.sql`                | Gatilhos de integridade (fatura da compra, retrato do pagamento, recálculo de parcelas)                                                                            |
+| `20261003120300_rls.sql`                     | RLS em todas as tabelas e permissões                                                                                                                               |
+| `20261003120400_novo_usuario.sql`            | `handle_new_user`: perfil, conta "Carteira" e categorias padrão                                                                                                    |
+| `20261003120500_rpc.sql`                     | RPCs: `saldo_total`, `saldo_contas`, `resumo_mes`, `dividas_do_mes`, `faturas_do_mes`, `fatura_cartao`, `total_fatura`, `progresso_meta_receita`, `totais_projeto` |
+| `20261004090000_projecao_desnecessarios.sql` | `resumo_mes`: projeção e "dias para estourar" calculadas só com inteiros, iguais às do TypeScript                                                                  |
 
 Aplicar em um projeto remoto: `supabase link --project-ref <ref>` e depois `supabase db push`.
+
+Migrations já aplicadas não são editadas: toda mudança entra num arquivo novo. Depois de mudar o schema, rode `npm run gen:types` para atualizar `src/types/database.ts`. O CI falha se os tipos estiverem desatualizados.
 
 ## Testes (pgTAP)
 
