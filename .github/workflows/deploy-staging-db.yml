@@ -1,0 +1,33 @@
+name: Supabase Staging DB - Dry Run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout migrations branch
+        uses: actions/checkout@v4
+        with:
+          ref: claude/financas-web-app-x71kro
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Link staging project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Preview migrations
+        run: supabase db push --dry-run
