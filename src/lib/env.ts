@@ -29,16 +29,12 @@ export function validarAmbiente(
   return { ok: false, problemas: resultado.error.issues.map((issue) => issue.message) }
 }
 
-function carregar(): Ambiente {
-  const resultado = validarAmbiente()
-  if (!resultado.ok) {
-    throw new Error(`Configuração inválida: ${resultado.problemas.join(' ')}`)
-  }
-  return resultado.ambiente
-}
+// Não lança erro ao importar: main.tsx importa validarAmbiente daqui e precisa
+// conseguir mostrar a tela de ErroDeConfiguracao quando faltar alguma variável.
+const inicial = validarAmbiente()
 
 /** Use só depois de validarAmbiente() ter passado (ver main.tsx). */
-export const env = carregar()
+export const env = (inicial.ok ? inicial.ambiente : {}) as Ambiente
 
 /** "Carregar/Limpar dados de exemplo" só aparece fora de produção. */
-export const permiteDadosDeExemplo = env.VITE_APP_AMBIENTE !== 'producao'
+export const permiteDadosDeExemplo = inicial.ok && env.VITE_APP_AMBIENTE !== 'producao'

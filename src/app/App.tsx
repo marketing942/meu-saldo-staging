@@ -3,12 +3,15 @@ import { RouterProvider } from 'react-router/dom'
 
 import { queryClient } from '@/lib/queryClient'
 
+import { ProvedorSessao } from './ProvedorSessao'
 import { router } from './router'
 
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ProvedorSessao>
+        <RouterProvider router={router} />
+      </ProvedorSessao>
     </QueryClientProvider>
   )
 }

@@ -1,9 +1,10 @@
-import { Settings } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import { Suspense } from 'react'
 import { Link, Outlet } from 'react-router'
 
 import { Icone } from '@/components/ui/Icone'
 import { MARCA } from '@/config/marca'
+import { sair } from '@/lib/sessao'
 
 import { AbasInferiores } from './AbasInferiores'
 import { CarregandoTela } from './CarregandoTela'
@@ -25,13 +26,24 @@ export function LayoutApp() {
       <header className="sticky top-0 z-10 border-b border-borda bg-fundo/95 pt-seguro backdrop-blur">
         <div className="mx-auto flex min-h-14 max-w-app items-center justify-between px-seguro">
           <span className="font-semibold">{MARCA.nome}</span>
-          <Link
-            to="/configuracoes"
-            aria-label="Configurações"
-            className="-mr-2 inline-flex size-11 items-center justify-center rounded-full text-secundario hover:text-texto"
-          >
-            <Icone icone={Settings} />
-          </Link>
+          <div className="-mr-2 flex items-center">
+            <Link
+              to="/configuracoes"
+              aria-label="Configurações"
+              className="inline-flex size-11 items-center justify-center rounded-full text-secundario hover:text-texto"
+            >
+              <Icone icone={Settings} />
+            </Link>
+            <button
+              type="button"
+              aria-label="Sair"
+              title="Sair"
+              onClick={() => void sair()}
+              className="inline-flex size-11 items-center justify-center rounded-full text-secundario hover:text-texto"
+            >
+              <Icone icone={LogOut} />
+            </button>
+          </div>
         </div>
       </header>
 
