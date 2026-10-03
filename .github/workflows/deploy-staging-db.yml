@@ -2,6 +2,11 @@ name: Supabase Staging DB - Dry Run
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite APLICAR para liberar as migrations no Meu-Saldo-Staging'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -37,4 +42,18 @@ jobs:
 
           echo "::add-mask::$DB_URL"
 
-          supabase db push --db-url "$DB_URL" --dry-run
+          supabase db push --db-url "$DB_URL" --dry-run     
+          
+      - name: Apply migrations to Meu-Saldo-Staging
+        if: ${{ inputs.confirm == 'APLICAR' }}
+        shell: bash
+        run: |
+          ENCODED_PASSWORD="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))')"
+
+          echo "::add-mask::$ENCODED_PASSWORD"
+
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_ID}:${ENCODED_PASSWORD}@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+
+          echo "::add-mask::$DB_URL"
+
+          supabase db push --db-url "$DB_URL"
