@@ -26,8 +26,15 @@ jobs:
         with:
           version: latest
 
-      - name: Link staging project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Preview migrations via IPv4 Session Pooler
+        shell: bash
+        run: |
+          ENCODED_PASSWORD="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))')"
 
-      - name: Preview migrations
-        run: supabase db push --dry-run
+          echo "::add-mask::$ENCODED_PASSWORD"
+
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_ID}:${ENCODED_PASSWORD}@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+
+          echo "::add-mask::$DB_URL"
+
+          supabase db push --db-url "$DB_URL" --dry-run
