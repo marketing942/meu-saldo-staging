@@ -15,10 +15,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": [
-    "vite.config.ts",
-    "pwa-assets.config.ts",
-    "playwright.config.ts",
-    "src/config/marca.ts"
-  ]
+  "include": ["vite.config.ts", "playwright.config.ts", "src/config/marca.ts"]
 }

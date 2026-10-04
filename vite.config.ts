@@ -30,7 +30,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icone.svg'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-32x32.png',
+        'favicon-48x48.png',
+        'apple-touch-icon-180x180.png',
+      ],
       manifest: {
         id: '/',
         name: MARCA.nome,

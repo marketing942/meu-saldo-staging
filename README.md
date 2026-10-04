@@ -1,8 +1,6 @@
-# Finanças
+# Meu Saldo
 
 App de organização financeira pessoal: gastos e receitas do mês, cartões (faturas e limite), contas a pagar, previsão de desnecessários e projetos. É mobile-first, instalável (PWA) e em português do Brasil (R$, datas dd/mm/aaaa, fuso America/Sao_Paulo).
-
-> "Finanças" é um nome provisório. Para trocar, veja [Trocar o nome do app](#trocar-o-nome-do-app).
 
 ## Stack
 
@@ -48,7 +46,7 @@ Sem as variáveis de ambiente, o app abre uma tela explicando o que falta.
 | `npm run test:e2e`                | Playwright: jornadas completas e acessibilidade (axe), com um Supabase falso em memória            |
 | `npm run test:db`                 | Sobe um Postgres do Supabase no Docker, aplica as migrations e roda os testes pgTAP (RLS e regras) |
 | `npm run gen:types`               | Regenera `src/types/database.ts` a partir das migrations (`supabase gen types`)                    |
-| `npm run gen:pwa-assets`          | Regenera os ícones do PWA a partir de `public/icone.svg`                                           |
+| `npm run gen:marca`               | Regenera favicons, ícones do PWA e variantes escuras a partir de `public/branding/`                |
 | `npm run check:ptbr`              | Procura nos textos da interface palavras comuns sem acento (`-- --listar` mostra todos os textos)  |
 
 ## Estrutura
@@ -57,7 +55,7 @@ Sem as variáveis de ambiente, o app abre uma tela explicando o que falta.
 src/
   app/            roteador, layouts (abas, cabeçalho) e telas de erro
   components/ui/  componentes base: Botao, Card, Campo, Pilula, Alerta, EstadoVazio, EstadoErro...
-  config/         marca (nome do app em um só lugar)
+  config/         marca (nome, logo e símbolo do app em um só lugar)
   lib/            supabase, react-query, ambiente, monitoramento, datas, dinheiro
   lib/regras/     regras financeiras puras (espelham as funções SQL), com testes
   pages/          telas
@@ -69,7 +67,10 @@ supabase/
   migrations/     schema, RLS, gatilhos e RPCs
   functions/      Edge Function excluir-conta (Deno)
   tests/          testes pgTAP (RLS com dois usuários e regras financeiras)
-scripts/          testes do banco, geração de tipos e checagem de português (check-ptbr)
+public/
+  branding/       logo completa e símbolo oficiais (e as variantes para o tema escuro)
+  *.png, *.ico    favicons e ícones do PWA, gerados a partir do símbolo (gen:marca)
+scripts/          testes do banco, geração de tipos, ícones da marca e checagem de português
 ```
 
 As regras financeiras existem em dois lugares com os mesmos casos de teste: funções puras em `src/lib/regras` (Vitest) e funções SQL em `supabase/migrations` (pgTAP). Detalhes e decisões de modelagem estão em [`supabase/README.md`](supabase/README.md).
@@ -182,10 +183,12 @@ O workflow `.github/workflows/ci.yml` roda em todo push e PR:
 - **e2e**: Playwright com as jornadas principais (cadastro, primeiro acesso, gastos e receitas, cartões, faturas e limite, contas a pagar, previsão de desnecessários, projetos, configurações, excluir conta) e checagem de acessibilidade com axe nos temas claro e escuro. Usa um Supabase falso em memória, sem rede nem segredos;
 - **banco**: aplica as migrations num Postgres do Supabase, roda os testes pgTAP (RLS com dois usuários e regras financeiras) e confere se `src/types/database.ts` está em dia com as migrations.
 
-## Trocar o nome do app
+## Marca
 
-1. Altere `src/config/marca.ts` (nome, descrição e cores do PWA).
-2. Se quiser outro ícone, troque `public/icone.svg` e rode `npm run gen:pwa-assets`.
+- **Nome, descrição e cores do PWA:** `src/config/marca.ts`.
+- **Logo completa** (`public/branding/logo-meu-saldo.png`): só nas telas de entrar, cadastro e senha.
+- **Símbolo** (`public/branding/simbolo-meu-saldo.png`): cabeçalho da área logada, favicon e ícones do PWA.
+- Os dois são PNG com fundo transparente, recortados rente ao desenho. Para trocar, substitua os arquivos e rode `npm run gen:marca`: o script cria as variantes para o tema escuro (`*-escuro.png`, com o preto em cor clara), os favicons (`favicon.ico` com 16/32/48 px, `favicon-32x32.png`, `favicon-48x48.png`) e os ícones do PWA (`pwa-64x64.png`, `pwa-192x192.png`, `pwa-512x512.png`, `maskable-icon-512x512.png` e `apple-touch-icon-180x180.png`, todos com fundo branco).
 
 ## Privacidade
 

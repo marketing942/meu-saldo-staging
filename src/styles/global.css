@@ -170,6 +170,31 @@
   }
 }
 
+/* Logo e símbolo (components/ui/Marca.tsx): cada um tem uma variante para o tema
+   escuro, com o preto em cor clara. Fora de camada, para valer sobre os utilitários. */
+.marca-claro {
+  display: block;
+}
+.marca-escuro {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) .marca-claro {
+    display: none;
+  }
+  :root:not([data-tema='claro']) .marca-escuro {
+    display: block;
+  }
+}
+
+:root[data-tema='escuro'] .marca-claro {
+  display: none;
+}
+:root[data-tema='escuro'] .marca-escuro {
+  display: block;
+}
+
 @keyframes pulsar {
   50% {
     opacity: 0.55;
