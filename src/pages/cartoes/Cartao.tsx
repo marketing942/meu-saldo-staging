@@ -144,8 +144,9 @@ export default function Cartao() {
           }}
         />
         <p className="text-sm text-secundario">
-          Cada compra ocupa o limite até a fatura em que ela entrou ser paga. Compras parceladas
-          ocupam todas as parcelas que faltam pagar.
+          O limite usado é diferente da fatura: cada compra ocupa o limite até a fatura em que
+          entrou ser paga (as parceladas, com todas as parcelas que faltam), e cada conta a pagar no
+          cartão ocupa o saldo devedor até cada parcela ser marcada como paga.
         </p>
         <AlertaLimite
           nome={f.nome}

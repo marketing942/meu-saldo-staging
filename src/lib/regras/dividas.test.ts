@@ -7,6 +7,7 @@ import {
   pagaAntesDoCadastro,
   parcelasRestantes,
   previaParcelada,
+  saldoDevedorContaAPagar,
   saldoDevedorDivida,
   statusDivida,
 } from './dividas'
@@ -98,5 +99,58 @@ describe('saldo devedor', () => {
   it('prévia do formulário: restam total − já pagas', () => {
     expect(previaParcelada(12, 7, 20000)).toEqual({ restantes: 5, saldoDevedorCentavos: 100000 })
     expect(previaParcelada(3, 5, 1000)).toEqual({ restantes: 0, saldoDevedorCentavos: 0 })
+  })
+})
+
+describe('saldo devedor da conta a pagar no cartão (limite)', () => {
+  const notebook: DividaParaCalculo = {
+    infinita: false,
+    totalParcelas: 12,
+    parcelasJaPagas: 0,
+    mesInicioRef: '2026-10',
+    diaVencimento: 15,
+    valorParcelaCentavos: 10000,
+    ativa: true,
+  }
+
+  it('recém-criada: todas as parcelas', () => {
+    expect(saldoDevedorContaAPagar(notebook, [], '2026-10')).toBe(120000)
+  })
+
+  it('cada parcela marcada como paga libera o valor dela, inclusive pagamento adiantado', () => {
+    expect(saldoDevedorContaAPagar(notebook, ['2026-10'], '2026-10')).toBe(110000)
+    expect(saldoDevedorContaAPagar(notebook, ['2026-10', '2026-11'], '2026-10')).toBe(100000)
+  })
+
+  it('parcelas pagas antes do cadastro não ocupam o limite', () => {
+    expect(saldoDevedorContaAPagar({ ...notebook, parcelasJaPagas: 3 }, [], '2026-10')).toBe(90000)
+  })
+
+  it('pagamento fora da contagem (antes do início ou depois da última) não conta', () => {
+    expect(saldoDevedorContaAPagar(notebook, ['2026-09', '2027-10'], '2026-10')).toBe(120000)
+  })
+
+  it('quitada não ocupa nada e nunca fica negativa', () => {
+    const tresVezes = { ...notebook, totalParcelas: 3 }
+    expect(saldoDevedorContaAPagar(tresVezes, ['2026-10', '2026-11', '2026-12'], '2027-01')).toBe(0)
+  })
+
+  it('encerrada (ativa = false) libera o limite', () => {
+    expect(saldoDevedorContaAPagar({ ...notebook, ativa: false }, [], '2026-10')).toBe(0)
+  })
+
+  it('recorrente ocupa só a parcela do mês atual, até ser marcada como paga', () => {
+    const assinatura = {
+      ...notebook,
+      infinita: true,
+      totalParcelas: null,
+      valorParcelaCentavos: 3990,
+    }
+    expect(saldoDevedorContaAPagar(assinatura, [], '2026-10')).toBe(3990)
+    expect(saldoDevedorContaAPagar(assinatura, ['2026-10'], '2026-10')).toBe(0)
+    // Antes de começar, não ocupa.
+    expect(saldoDevedorContaAPagar({ ...assinatura, mesInicioRef: '2026-11' }, [], '2026-10')).toBe(
+      0,
+    )
   })
 })

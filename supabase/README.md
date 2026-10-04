@@ -2,16 +2,17 @@
 
 ## Migrations
 
-| Arquivo                                             | Conteúdo                                                                                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `20261003120000_base.sql`                           | Tipos enumerados e funções puras de datas, meses, fatura e parcelas                                                                                                |
-| `20261003120100_tabelas.sql`                        | Tabelas, constraints e índices                                                                                                                                     |
-| `20261003120200_gatilhos.sql`                       | Gatilhos de integridade (fatura da compra, retrato do pagamento, recálculo de parcelas)                                                                            |
-| `20261003120300_rls.sql`                            | RLS em todas as tabelas e permissões                                                                                                                               |
-| `20261003120400_novo_usuario.sql`                   | `handle_new_user`: perfil, conta "Carteira" e categorias padrão                                                                                                    |
-| `20261003120500_rpc.sql`                            | RPCs: `saldo_total`, `saldo_contas`, `resumo_mes`, `dividas_do_mes`, `faturas_do_mes`, `fatura_cartao`, `total_fatura`, `progresso_meta_receita`, `totais_projeto` |
-| `20261004090000_projecao_desnecessarios.sql`        | `resumo_mes`: projeção e "dias para estourar" calculadas só com inteiros, iguais às do TypeScript                                                                  |
-| `20261004100000_limite_cartao_sem_meta_receita.sql` | Remove a meta de receita (`metas_receita` e `progresso_meta_receita`); cria `limite_cartao` e faz `faturas_do_mes` usar o mesmo cálculo de limite                  |
+| Arquivo                                             | Conteúdo                                                                                                                                                                                |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20261003120000_base.sql`                           | Tipos enumerados e funções puras de datas, meses, fatura e parcelas                                                                                                                     |
+| `20261003120100_tabelas.sql`                        | Tabelas, constraints e índices                                                                                                                                                          |
+| `20261003120200_gatilhos.sql`                       | Gatilhos de integridade (fatura da compra, retrato do pagamento, recálculo de parcelas)                                                                                                 |
+| `20261003120300_rls.sql`                            | RLS em todas as tabelas e permissões                                                                                                                                                    |
+| `20261003120400_novo_usuario.sql`                   | `handle_new_user`: perfil, conta "Carteira" e categorias padrão                                                                                                                         |
+| `20261003120500_rpc.sql`                            | RPCs: `saldo_total`, `saldo_contas`, `resumo_mes`, `dividas_do_mes`, `faturas_do_mes`, `fatura_cartao`, `total_fatura`, `progresso_meta_receita`, `totais_projeto`                      |
+| `20261004090000_projecao_desnecessarios.sql`        | `resumo_mes`: projeção e "dias para estourar" calculadas só com inteiros, iguais às do TypeScript                                                                                       |
+| `20261004100000_limite_cartao_sem_meta_receita.sql` | Remove a meta de receita (`metas_receita` e `progresso_meta_receita`); cria `limite_cartao` e faz `faturas_do_mes` usar o mesmo cálculo de limite                                       |
+| `20261004110000_limite_cartao_contas_a_pagar.sql`   | `limite_cartao`: conta a pagar no cartão passa a comprometer o saldo devedor (todas as parcelas que faltam) desde que é criada; cada parcela paga libera o valor dela. Só a função muda |
 
 Aplicar em um projeto remoto: `supabase link --project-ref <ref>` e depois `supabase db push`.
 
@@ -43,7 +44,7 @@ Com o Supabase CLI: `supabase start` e depois `supabase test db`.
 ## Decisões de modelagem
 
 - **Nomes internos x nomes de tela.** A tabela `dividas` aparece na interface como "Contas a pagar"; a tabela `contas`, como "Carteira"; `profiles.meta_desnecessario_centavos`, como "Previsão de desnecessários". O schema não muda por causa dos textos.
-- **Limite do cartão calculado na hora.** `limite_cartao(cartao_id)` soma, para o cartão, as compras não excluídas (cada parcela, inclusive as de meses futuros) e as contas a pagar pagas no cartão, ignorando o que está em faturas já pagas. Nada fica guardado numa coluna: editar, excluir, desfazer ou pagar a fatura muda o resultado na próxima consulta. `faturas_do_mes` usa a mesma função.
+- **Limite do cartão calculado na hora.** `limite_cartao(cartao_id)` soma duas fontes, sem sobreposição: (1) compras (`gastos`) não excluídas em faturas ainda não pagas, cada parcela inclusive as de meses futuros; (2) contas a pagar com `forma_pagamento = 'cartao'` naquele cartão, pelo saldo devedor ainda não quitado: parcelada = (total − já pagas antes do cadastro − parcelas marcadas como pagas) × valor da parcela; recorrente = a parcela do mês atual enquanto não está paga; encerrada ou excluída = nada. `dividas_pagamentos` não entra no limite (a parcela paga já saiu do saldo), mas continua na fatura: a fatura mostra só a parcela do ciclo, o limite mostra o saldo inteiro. Nada fica guardado numa coluna; `faturas_do_mes` usa a mesma função.
 
 - **Isolamento por chave estrangeira composta.** Toda referência a outro registro do usuário usa `(registro_id, user_id) -> (id, user_id)`. Uma linha não consegue apontar para a conta, o cartão, a categoria, a dívida ou o projeto de outra pessoa, mesmo que o id vaze. Isso funciona junto com o RLS.
 - **Fatura = mês em que fecha.** `gastos.fatura_mes_ref` é calculado por gatilho quando a compra é lançada (ou quando a data ou o cartão mudam). Mudar depois o dia de fechamento do cartão não move compras antigas. O vencimento cai no mesmo mês se `dia_vencimento > dia_fechamento`; senão, no mês seguinte.

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { type MesRef, hoje } from '../datas'
+import type { DividaParaCalculo } from '../regras/dividas'
 import { useUsuario } from '../sessao'
 import { type Enums, type Funcoes, type Linha, supabase } from '../supabase'
 import { type Anulavel, agoraISO, dados, useAtualizarTudo } from './comum'
@@ -42,6 +43,39 @@ export function useDivida(dividaId: string | undefined) {
           .maybeSingle(),
       ),
   })
+}
+
+/**
+ * Meses (mes_ref) com parcela marcada como paga. Usado na prévia do limite do
+ * cartão ao editar uma conta a pagar (cada parcela paga libera o limite).
+ */
+export function usePagamentosDivida(dividaId: string | undefined) {
+  const { id } = useUsuario()
+  return useQuery({
+    queryKey: ['divida-pagamentos', id, dividaId],
+    enabled: Boolean(dividaId),
+    queryFn: () =>
+      dados<{ mes_ref: string }[]>(
+        supabase
+          .from('dividas_pagamentos')
+          .select('mes_ref')
+          .eq('user_id', id)
+          .eq('divida_id', dividaId ?? ''),
+      ),
+  })
+}
+
+/** Linha da tabela no formato das regras puras (src/lib/regras/dividas). */
+export function dividaParaCalculo(d: Divida): DividaParaCalculo {
+  return {
+    infinita: d.infinita,
+    totalParcelas: d.total_parcelas,
+    parcelasJaPagas: d.parcelas_ja_pagas,
+    mesInicioRef: d.mes_inicio_ref,
+    diaVencimento: d.dia_vencimento,
+    valorParcelaCentavos: d.valor_parcela_centavos,
+    ativa: d.ativa,
+  }
 }
 
 export interface DadosDivida {

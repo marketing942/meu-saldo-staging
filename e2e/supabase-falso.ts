@@ -13,6 +13,7 @@ import type { BrowserContext, Request, Route } from '@playwright/test'
 
 import { type MesRef, dataNoMes, hoje, mesAtual, primeiroDia, ultimoDia } from '@/lib/datas'
 import {
+  comprometidoPorContasAPagar,
   faturaQueVenceNoMes,
   fechamentoFatura,
   limiteCartao,
@@ -533,7 +534,10 @@ export class SupabaseFalso {
       .sort((a, b) => (a.data_vencimento < b.data_vencimento ? -1 : 1))
   }
 
-  /** Espelha public.limite_cartao: lançamentos não excluídos em faturas não pagas. */
+  /**
+   * Espelha public.limite_cartao: compras não excluídas em faturas não pagas +
+   * saldo devedor das contas a pagar neste cartão.
+   */
   limiteCartao(uid: string, cartaoId: string) {
     const cartao = this.linhas('cartoes', uid).find((c) => c.id === cartaoId)
     if (!cartao) return null
@@ -549,14 +553,20 @@ export class SupabaseFalso {
         faturaMesRef: str(g.fatura_mes_ref),
         excluido: !!g.deleted_at,
       }))
-    const contasAPagar = this.linhas('dividas_pagamentos', uid)
-      .filter((p) => p.cartao_id === cartaoId)
-      .map((p) => ({
-        valorCentavos: num(p.valor_centavos),
-        faturaMesRef: str(p.fatura_mes_ref),
-        excluido: !this.dividaAtiva(uid, p),
-      }))
-    const limite = limiteCartao(num(cartao.limite_centavos), [...compras, ...contasAPagar], pagas)
+    const pagamentos = this.linhas('dividas_pagamentos', uid)
+    const contasAPagar = this.linhas('dividas', uid).map((d) => ({
+      ...paraCalculo(d),
+      formaPagamento: d.forma_pagamento === 'cartao' ? ('cartao' as const) : ('conta' as const),
+      cartaoId: d.cartao_id === null ? null : str(d.cartao_id),
+      excluida: !!d.deleted_at,
+      mesesPagos: pagamentos.filter((p) => p.divida_id === d.id).map((p) => str(p.mes_ref)),
+    }))
+    const limite = limiteCartao(
+      num(cartao.limite_centavos),
+      compras,
+      pagas,
+      comprometidoPorContasAPagar(cartaoId, contasAPagar, mesAtual()),
+    )
     return {
       cartao_id: cartaoId,
       limite_centavos: limite.limiteCentavos,

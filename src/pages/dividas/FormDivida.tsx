@@ -1,4 +1,4 @@
-import { CalendarClock, CircleAlert, Info, Trash2 } from 'lucide-react'
+import { CalendarClock, CircleAlert, Info, Trash2, TriangleAlert } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useParams } from 'react-router'
 
@@ -17,22 +17,28 @@ import { Interruptor } from '@/components/ui/Interruptor'
 import { LinkBotao } from '@/components/ui/LinkBotao'
 import { Pilula } from '@/components/ui/Pilula'
 import { Selecao } from '@/components/ui/Selecao'
-import { type Cartao, useCartoes } from '@/lib/dados/cartoes'
+import { type Cartao, useCartoes, useLimiteCartao } from '@/lib/dados/cartoes'
 import { contaPadrao, useContas } from '@/lib/dados/contas'
 import { desfazerCom } from '@/lib/dados/desfazer'
 import {
   type Divida,
   ROTULO_TIPO_DIVIDA,
+  dividaParaCalculo,
   restaurarDivida,
   useDivida,
   useExcluirDivida,
+  usePagamentosDivida,
   useSalvarDivida,
 } from '@/lib/dados/dividas'
+import { mesAtual } from '@/lib/datas'
 import { formatarCentavos } from '@/lib/dinheiro'
 import { mensagemDeErro } from '@/lib/erros'
 import { useVoltar } from '@/lib/navegacao'
+import { disponivelDepoisDaConta } from '@/lib/regras/cartao'
+import { saldoDevedorContaAPagar } from '@/lib/regras/dividas'
 import { useUsuario } from '@/lib/sessao'
 import type { Enums } from '@/lib/supabase'
+import { useFormatarValor } from '@/lib/valores'
 import { useAvisos } from '@/stores/avisos'
 
 /** Conta a pagar: /contas-a-pagar/nova e /contas-a-pagar/:dividaId (editar). */
@@ -83,6 +89,7 @@ interface Erros {
   total?: string
   jaPagas?: string
   conta?: string
+  limite?: string
 }
 
 function Formulario({
@@ -112,7 +119,9 @@ function Formulario({
   const [contaEscolhida, setContaEscolhida] = useState(original?.conta_id ?? '')
   const [cartaoId, setCartaoId] = useState(original?.cartao_id ?? cartoesVisiveis[0]?.id ?? '')
   const [ativa, setAtiva] = useState(original?.ativa ?? true)
+  const [acimaDoLimiteConfirmado, setAcimaDoLimiteConfirmado] = useState(false)
   const [erros, setErros] = useState<Erros>({})
+  const formatar = useFormatarValor()
 
   const contaId = contaEscolhida || contaPadrao(contas)?.conta_id || ''
   const totalNum = Number(total)
@@ -121,6 +130,56 @@ function Formulario({
     !infinita && Number.isInteger(totalNum) && totalNum > 0 && jaPagasNum < totalNum
       ? `Restam ${totalNum - jaPagasNum} parcelas · saldo devedor ${formatarCentavos((totalNum - jaPagasNum) * valor)}`
       : null
+
+  // Limite do cartão: a conta compromete o saldo devedor ainda não quitado
+  // (parcelada: todas as parcelas que faltam; recorrente: a parcela do mês).
+  const cartao = forma === 'cartao' ? cartoesVisiveis.find((c) => c.id === cartaoId) : undefined
+  const limite = useLimiteCartao(cartao?.id)
+  const pagamentos = usePagamentosDivida(original?.id)
+  const mesesPagos = pagamentos.data?.map((p) => p.mes_ref) ?? []
+  const hojeMes = mesAtual()
+  const numerosValidos =
+    infinita ||
+    (Number.isInteger(totalNum) &&
+      totalNum >= 1 &&
+      totalNum <= 600 &&
+      Number.isInteger(jaPagasNum) &&
+      jaPagasNum >= 0 &&
+      jaPagasNum < totalNum)
+  // Como o gatilho dividas_preparar: mudar total, já pagas ou tipo recomeça a contagem neste mês.
+  const recomecaContagem =
+    !original ||
+    original.infinita !== infinita ||
+    original.total_parcelas !== (infinita ? null : totalNum) ||
+    original.parcelas_ja_pagas !== (infinita ? 0 : jaPagasNum)
+  const comprometeCentavos =
+    cartao && valor > 0 && numerosValidos
+      ? saldoDevedorContaAPagar(
+          {
+            infinita,
+            totalParcelas: infinita ? null : totalNum,
+            parcelasJaPagas: infinita ? 0 : jaPagasNum,
+            mesInicioRef: recomecaContagem || !original ? hojeMes : original.mes_inicio_ref,
+            diaVencimento: lerDia(dia) ?? 1,
+            valorParcelaCentavos: valor,
+            ativa,
+          },
+          original ? mesesPagos : [],
+          hojeMes,
+        )
+      : 0
+  // Na edição no mesmo cartão, o que a conta já ocupa volta antes de comparar.
+  const jaOcupadoNoCartao =
+    original && cartao && original.forma_pagamento === 'cartao' && original.cartao_id === cartao.id
+      ? saldoDevedorContaAPagar(dividaParaCalculo(original), mesesPagos, hojeMes)
+      : 0
+  const disponivelHoje = limite.data?.disponivel_centavos ?? null
+  const disponivelDepois =
+    disponivelHoje === null
+      ? null
+      : disponivelDepoisDaConta(disponivelHoje, comprometeCentavos, jaOcupadoNoCartao)
+  const passaDoLimite =
+    disponivelDepois !== null && disponivelDepois < 0 && comprometeCentavos > jaOcupadoNoCartao
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
@@ -140,9 +199,13 @@ function Formulario({
       conta:
         forma === 'conta' && !contaId
           ? 'Escolha a carteira.'
-          : forma === 'cartao' && !cartaoId
+          : forma === 'cartao' && !cartao
             ? 'Escolha o cartão.'
             : undefined,
+      limite:
+        passaDoLimite && !acimaDoLimiteConfirmado
+          ? 'Confirme que quer salvar a conta acima do limite.'
+          : undefined,
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean) || !diaNum) return
@@ -296,18 +359,68 @@ function Formulario({
             />
           )
         ) : (
-          <Selecao
-            rotulo="Cartão"
-            value={cartaoId}
-            onChange={(e) => setCartaoId(e.target.value)}
-            erro={erros.conta}
-          >
-            {cartoesVisiveis.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </Selecao>
+          <div className="flex flex-col gap-2">
+            <Selecao
+              rotulo="Cartão"
+              value={cartaoId}
+              onChange={(e) => setCartaoId(e.target.value)}
+              erro={erros.conta}
+            >
+              {cartoesVisiveis.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Selecao>
+            {cartao && disponivelHoje !== null && disponivelDepois !== null && (
+              <div className="flex flex-col gap-1 rounded-campo border border-borda p-3 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span className="text-secundario">Limite disponível hoje:</span>{' '}
+                  <span className="valor font-medium">{formatar(disponivelHoje)}</span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-secundario">Esta conta comprometerá:</span>{' '}
+                  <span className="valor font-medium">{formatar(comprometeCentavos)}</span>
+                </p>
+                <p className="flex justify-between gap-3 font-medium">
+                  <span>Disponível após {original ? 'salvar' : 'lançamento'}:</span>{' '}
+                  <span className={disponivelDepois < 0 ? 'valor text-desnecessario' : 'valor'}>
+                    {formatar(disponivelDepois)}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-secundario">
+                  {infinita
+                    ? 'Recorrente: ocupa a parcela do mês até ela ser marcada como paga.'
+                    : 'Parcelada: ocupa todas as parcelas que faltam; cada parcela marcada como paga libera o valor dela.'}
+                </p>
+              </div>
+            )}
+            {passaDoLimite && disponivelHoje !== null && disponivelDepois !== null && (
+              <Alerta
+                tom="alerta"
+                icone={TriangleAlert}
+                anunciar
+                titulo={`Esta conta passa do limite disponível (${formatar(disponivelHoje + jaOcupadoNoCartao)})`}
+              >
+                <p>
+                  Ela passa {formatar(-disponivelDepois)} do limite do cartão. Você pode salvar
+                  mesmo assim.
+                </p>
+                <label className="mt-2 flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={acimaDoLimiteConfirmado}
+                    onChange={(e) => setAcimaDoLimiteConfirmado(e.target.checked)}
+                    className="size-5 accent-[var(--destaque)]"
+                  />
+                  Salvar mesmo assim
+                </label>
+                {erros.limite && !acimaDoLimiteConfirmado && (
+                  <p className="mt-1 text-desnecessario">{erros.limite}</p>
+                )}
+              </Alerta>
+            )}
+          </div>
         )}
         {erros.conta && forma === 'conta' && (
           <p className="text-sm text-desnecessario">{erros.conta}</p>

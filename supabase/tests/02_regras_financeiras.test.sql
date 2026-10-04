@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(74);
+select plan(87);
 
 -- Auxiliares ------------------------------------------------------------------
 
@@ -313,16 +313,24 @@ select is(
   'limite: desfazer a exclusão volta a consumir o limite'
 );
 
--- Conta a pagar recorrente no cartão: a parcela de novembro entra na fatura de novembro.
-insert into public.dividas_pagamentos (divida_id, mes_ref)
-values ('c0000000-0000-4000-8000-0000000000d2', '2026-11');
+-- Conta a pagar recorrente no cartão (Streaming): ocupa a parcela do mês atual
+-- enquanto ela não está paga. A de outubro já está paga, por isso não contava.
+delete from public.dividas_pagamentos
+ where divida_id = 'c0000000-0000-4000-8000-0000000000d2' and mes_ref = '2026-10';
 select is(
   (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
   150000::bigint,
-  'limite: conta a pagar no cartão consome o valor da parcela do mês'
+  'limite: recorrente no cartão ocupa a parcela do mês atual enquanto não está paga'
+);
+insert into public.dividas_pagamentos (divida_id, mes_ref)
+values ('c0000000-0000-4000-8000-0000000000d2', '2026-10');
+select is(
+  (select usado_centavos from public.limite_cartao('c0000000-0000-4000-8000-0000000000c1')),
+  145000::bigint,
+  'limite: marcar a parcela do mês como paga libera o valor dela'
 );
 
--- Fatura de novembro paga: Geladeira 2/3 + Farmácia + TV + Celular 1/4 + Streaming = 80000.
+-- Fatura de novembro paga: Geladeira 2/3 + Farmácia + TV + Celular 1/4 = 75000.
 insert into public.faturas_pagas (cartao_id, mes_ref, conta_id)
 values ('c0000000-0000-4000-8000-0000000000c1', '2026-11', (select id from public.contas));
 select is(
@@ -333,8 +341,6 @@ select is(
 
 delete from public.faturas_pagas
  where cartao_id = 'c0000000-0000-4000-8000-0000000000c1' and mes_ref = '2026-11';
-delete from public.dividas_pagamentos
- where divida_id = 'c0000000-0000-4000-8000-0000000000d2' and mes_ref = '2026-11';
 delete from public.gastos
  where id = 'c0000000-0000-4000-8000-000000000006'
     or grupo_parcelas = 'c0000000-0000-4000-8000-00000000009b';
@@ -573,6 +579,141 @@ select results_eq(
     from public.resumo_mes('2026-10')$$,
   $$values (413333::bigint, 3)$$,
   'projeção com ritmo em dízima: exatamente 3 dias, sem dia a mais'
+);
+
+-- -----------------------------------------------------------------------------
+-- Contas a pagar no cartão comprometem o limite pelo saldo devedor (migration 09)
+-- Usuária Eva, separada do cenário acima. Nubank: limite 400000, fecha dia 10.
+-- Visa: limite 100000. "Hoje" continua 03/10/2026.
+-- -----------------------------------------------------------------------------
+reset role;
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                        raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values ('00000000-0000-0000-0000-000000000000', 'eeeeeeee-0000-4000-8000-000000000001',
+        'authenticated', 'authenticated', 'eva@teste.local', '',
+        '{"provider":"email","providers":["email"]}', '{"nome":"Eva"}', now(), now());
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'eeeeeeee-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-4000-8000-000000000001","role":"authenticated"}', true);
+
+insert into public.cartoes (id, nome, limite_centavos, dia_fechamento, dia_vencimento)
+values ('e0000000-0000-4000-8000-0000000000c1', 'Nubank', 400000, 10, 20),
+       ('e0000000-0000-4000-8000-0000000000c2', 'Visa', 100000, 5, 15);
+
+-- A) Dívida de 12 × 10000 no Nubank: compromete o total na hora.
+insert into public.dividas (id, nome, valor_parcela_centavos, dia_vencimento, total_parcelas,
+                            forma_pagamento, cartao_id)
+values ('e0000000-0000-4000-8000-0000000000d1', 'Notebook', 10000, 15, 12,
+        'cartao', 'e0000000-0000-4000-8000-0000000000c1');
+select results_eq(
+  $$select limite_centavos, usado_centavos, disponivel_centavos, percentual
+    from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')$$,
+  $$values (400000::bigint, 120000::bigint, 280000::bigint, 30.00::numeric)$$,
+  'A: conta a pagar de 12 × 100,00 no cartão compromete 1.200,00 na hora'
+);
+
+-- B) Pagar a parcela de outubro libera exatamente 10000.
+insert into public.dividas_pagamentos (divida_id, mes_ref)
+values ('e0000000-0000-4000-8000-0000000000d1', '2026-10');
+select results_eq(
+  $$select usado_centavos, disponivel_centavos
+    from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')$$,
+  $$values (110000::bigint, 290000::bigint)$$,
+  'B: pagar uma parcela de 100,00 libera 100,00 do limite'
+);
+
+-- F) Fatura e limite são métricas diferentes.
+select results_eq(
+  $$select f.total_centavos, f.dividas_centavos, l.usado_centavos
+    from public.fatura_cartao('e0000000-0000-4000-8000-0000000000c1', '2026-11') f,
+         public.limite_cartao('e0000000-0000-4000-8000-0000000000c1') l$$,
+  $$values (10000::bigint, 10000::bigint, 110000::bigint)$$,
+  'F: a fatura tem só a parcela do ciclo; o limite tem todo o saldo devedor'
+);
+insert into public.gastos (valor_centavos, descricao, data, origem, cartao_id, tipo,
+                           parcela_atual, total_parcelas, grupo_parcelas)
+select p.valor_centavos, 'Fone', p.data, 'cartao', 'e0000000-0000-4000-8000-0000000000c1',
+       'desnecessario', p.parcela, 3, 'e0000000-0000-4000-8000-00000000009a'
+from public.gerar_parcelas(30000, '2026-10-05', 3) p;
+select results_eq(
+  $$select f.compras_centavos, l.usado_centavos
+    from public.fatura_cartao('e0000000-0000-4000-8000-0000000000c1', '2026-10') f,
+         public.limite_cartao('e0000000-0000-4000-8000-0000000000c1') l$$,
+  $$values (10000::bigint, 140000::bigint)$$,
+  'F: compra parcelada em 3 × 100,00: a fatura tem 100,00 e o limite os 300,00 (sem contar a conta a pagar duas vezes)'
+);
+
+-- D) Duas contas a pagar no mesmo cartão somam.
+insert into public.dividas (id, nome, valor_parcela_centavos, dia_vencimento, total_parcelas,
+                            forma_pagamento, cartao_id)
+values ('e0000000-0000-4000-8000-0000000000d2', 'Celular', 5000, 20, 6,
+        'cartao', 'e0000000-0000-4000-8000-0000000000c1');
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  170000::bigint,
+  'D: duas contas a pagar e uma compra no mesmo cartão somam (110000 + 30000 + 30000)'
+);
+
+-- E) Cartões diferentes nunca se misturam.
+insert into public.dividas (id, nome, valor_parcela_centavos, dia_vencimento, total_parcelas,
+                            forma_pagamento, cartao_id)
+values ('e0000000-0000-4000-8000-0000000000d3', 'Curso', 10000, 10, 3,
+        'cartao', 'e0000000-0000-4000-8000-0000000000c2');
+select results_eq(
+  $$select (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+           (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c2'))$$,
+  $$values (170000::bigint, 30000::bigint)$$,
+  'E: contas a pagar de cartões diferentes ficam cada uma no seu cartão'
+);
+
+-- Alterações recalculam o comprometimento.
+update public.dividas set valor_parcela_centavos = 6000
+ where id = 'e0000000-0000-4000-8000-0000000000d2';
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  176000::bigint,
+  'alterar o valor da parcela recalcula o saldo devedor (6 × 6000)'
+);
+update public.dividas set cartao_id = 'e0000000-0000-4000-8000-0000000000c1'
+ where id = 'e0000000-0000-4000-8000-0000000000d3';
+select results_eq(
+  $$select (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+           (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c2'))$$,
+  $$values (206000::bigint, 0::bigint)$$,
+  'trocar o cartão da conta move o comprometimento para o novo cartão'
+);
+update public.dividas set total_parcelas = 10
+ where id = 'e0000000-0000-4000-8000-0000000000d1';
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  186000::bigint,
+  'alterar o número de parcelas recalcula: 10 parcelas, 1 paga, saldo 90000'
+);
+update public.dividas set ativa = false
+ where id = 'e0000000-0000-4000-8000-0000000000d2';
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  150000::bigint,
+  'encerrar a conta a pagar (ativa = false) libera o saldo dela'
+);
+
+-- C) Excluir o que resta devolve todo o limite; desfazer volta a comprometer.
+update public.dividas set deleted_at = now()
+ where id in ('e0000000-0000-4000-8000-0000000000d1', 'e0000000-0000-4000-8000-0000000000d3');
+update public.gastos set deleted_at = now()
+ where grupo_parcelas = 'e0000000-0000-4000-8000-00000000009a';
+select results_eq(
+  $$select usado_centavos, disponivel_centavos
+    from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')$$,
+  $$values (0::bigint, 400000::bigint)$$,
+  'C: excluir as contas e a compra restantes devolve todo o limite'
+);
+update public.dividas set deleted_at = null
+ where id = 'e0000000-0000-4000-8000-0000000000d1';
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  90000::bigint,
+  'desfazer a exclusão volta a comprometer o saldo devedor'
 );
 
 select * from finish();

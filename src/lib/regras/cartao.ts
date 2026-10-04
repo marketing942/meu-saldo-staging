@@ -1,6 +1,8 @@
 import { type DataISO, type MesRef, dataNoMes, diaDe, mesAdd, mesDe } from '@/lib/datas'
 import { type Centavos, percentual } from '@/lib/dinheiro'
 
+import { type DividaParaCalculo, saldoDevedorContaAPagar } from './dividas'
+
 /**
  * Regra 3 — fatura do cartão. A fatura é identificada pelo mês em que FECHA.
  * Compra até o dia de fechamento (inclusive) entra na fatura que fecha no mês
@@ -85,20 +87,26 @@ export function gerarParcelas(
   }))
 }
 
-/**
- * Lançamento que ocupa o limite: cada parcela de compra (à vista = 1 parcela) e
- * cada parcela de conta a pagar paga no cartão, na fatura em que entrou.
+/*
+ * Limite do cartão. Duas fontes, sem sobreposição:
+ *   1. Compras (gastos): cada parcela ocupa o limite até a fatura em que ela
+ *      entrou ser paga; inclui as parcelas de meses futuros.
+ *   2. Contas a pagar no cartão (dividas): ocupam o saldo devedor ainda não
+ *      quitado (ver saldoDevedorContaAPagar). A parcela marcada como paga sai do
+ *      saldo, por isso dividas_pagamentos não entra de novo no limite.
  */
+
+/** Parcela de compra no cartão (à vista = 1 parcela), na fatura em que entrou. */
 export interface LancamentoLimite {
   valorCentavos: Centavos
   faturaMesRef: MesRef
-  /** Excluído (ou conta a pagar excluída): não ocupa o limite. Desfazer volta a ocupar. */
+  /** Compra excluída não ocupa o limite. Desfazer a exclusão volta a ocupar. */
   excluido?: boolean
 }
 
 /**
- * Limite usado: tudo que está em faturas ainda não pagas, inclusive as parcelas
- * de meses futuros. Marcar a fatura como paga devolve o valor dela ao limite.
+ * Parte das compras no limite usado: tudo que está em faturas ainda não pagas,
+ * inclusive as parcelas de meses futuros. Fatura paga devolve o valor dela.
  */
 export function limiteUsado(
   lancamentos: ReadonlyArray<LancamentoLimite>,
@@ -118,13 +126,41 @@ export interface LimiteCartao {
   percentual: number
 }
 
-/** Espelha public.limite_cartao. */
+/** Conta a pagar com o que o limite precisa saber dela. */
+export interface ContaAPagarNoCartao extends DividaParaCalculo {
+  formaPagamento: 'conta' | 'cartao'
+  cartaoId: string | null
+  /** Excluída (deleted_at): não ocupa o limite. Desfazer volta a ocupar. */
+  excluida: boolean
+  /** mes_ref das parcelas marcadas como pagas. */
+  mesesPagos: readonly MesRef[]
+}
+
+/**
+ * Parte das contas a pagar no limite usado de um cartão: soma do saldo devedor
+ * das contas pagas com ESTE cartão (as de outros cartões nunca entram).
+ */
+export function comprometidoPorContasAPagar(
+  cartaoId: string,
+  contas: ReadonlyArray<ContaAPagarNoCartao>,
+  mesAtual: MesRef,
+): Centavos {
+  return contas
+    .filter((c) => c.formaPagamento === 'cartao' && c.cartaoId === cartaoId && !c.excluida)
+    .reduce((soma, c) => soma + saldoDevedorContaAPagar(c, c.mesesPagos, mesAtual), 0)
+}
+
+/**
+ * Espelha public.limite_cartao: usado = compras em faturas não pagas + saldo
+ * devedor das contas a pagar no cartão; disponível = limite − usado.
+ */
 export function limiteCartao(
   limiteCentavos: Centavos,
-  lancamentos: ReadonlyArray<LancamentoLimite>,
+  compras: ReadonlyArray<LancamentoLimite>,
   faturasPagas: ReadonlySet<MesRef>,
+  comprometidoContasAPagarCentavos: Centavos = 0,
 ): LimiteCartao {
-  const usado = limiteUsado(lancamentos, faturasPagas)
+  const usado = limiteUsado(compras, faturasPagas) + comprometidoContasAPagarCentavos
   return {
     limiteCentavos,
     usadoCentavos: usado,
@@ -146,4 +182,16 @@ export function excessoNoLimite(
   valorAnteriorCentavos: Centavos = 0,
 ): Centavos {
   return Math.max(valorCompraCentavos - valorAnteriorCentavos - disponivelCentavos, 0)
+}
+
+/**
+ * Disponível depois de salvar uma conta a pagar no cartão. Na edição no mesmo
+ * cartão, o que a conta já ocupava volta antes de descontar o novo valor.
+ */
+export function disponivelDepoisDaConta(
+  disponivelHojeCentavos: Centavos,
+  comprometeCentavos: Centavos,
+  jaOcupadoNoMesmoCartaoCentavos: Centavos = 0,
+): Centavos {
+  return disponivelHojeCentavos + jaOcupadoNoMesmoCartaoCentavos - comprometeCentavos
 }

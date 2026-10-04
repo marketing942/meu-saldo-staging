@@ -8,7 +8,7 @@ test('conta a pagar parcelada: prévia, marcar como paga, desfazer e mês seguin
 }) => {
   const usuario = await usuarioLogado(page, banco)
   // Na aba inferior o rótulo é curto; a tela tem o nome completo.
-  await page.getByRole('link', { name: 'A pagar' }).click()
+  await page.getByRole('link', { name: 'A pagar', exact: true }).click()
   await expect(page).toHaveURL(/\/contas-a-pagar$/)
   await expect(page.getByRole('heading', { name: 'Contas a pagar', level: 1 })).toBeVisible()
   await expect(page.getByText('Nenhuma conta a pagar neste mês')).toBeVisible()
@@ -122,4 +122,104 @@ test('alerta de conta a pagar que vence hoje', async ({ page, banco }) => {
   await expect(page.getByText('Internet: R$ 99,90.')).toBeVisible()
   await page.getByRole('link', { name: 'Ver contas a pagar' }).click()
   await expect(page).toHaveURL(/\/contas-a-pagar$/)
+})
+
+test('conta a pagar no cartão compromete o limite na hora e libera a cada parcela paga', async ({
+  page,
+  banco,
+}) => {
+  const usuario = await usuarioLogado(page, banco)
+  const cartao = banco.inserir(usuario.id, 'cartoes', {
+    nome: 'Nubank',
+    limite_centavos: 400000,
+    dia_fechamento: 10,
+    dia_vencimento: 20,
+  })
+  const limite = () => banco.limiteCartao(usuario.id, cartao.id)
+
+  await page.goto('/contas-a-pagar/nova')
+  await page.getByLabel('Nome').fill('Notebook')
+  await digitarValor(page, 'Valor da parcela (R$)', '10000')
+  await page.getByLabel('Dia do venc.').fill('15')
+  await page.getByLabel('Total de parcelas').fill('12')
+  await page.getByRole('button', { name: 'Cartão de crédito' }).click()
+  await expect(page.getByLabel('Cartão', { exact: true })).toHaveValue(cartao.id)
+  await expect(page.getByText('Limite disponível hoje: R$ 4.000,00')).toBeVisible()
+  await expect(page.getByText('Esta conta comprometerá: R$ 1.200,00')).toBeVisible()
+  await expect(page.getByText('Disponível após lançamento: R$ 2.800,00')).toBeVisible()
+  await page.getByRole('button', { name: 'Salvar conta a pagar' }).click()
+  await expect(page.getByText('Conta a pagar salva.')).toBeVisible()
+  expect(limite()).toMatchObject({ usado_centavos: 120000, disponivel_centavos: 280000 })
+
+  // Início: o card do cartão mostra a fatura e, separado, o limite comprometido.
+  await page.getByRole('link', { name: 'Início', exact: true }).click()
+  await expect(page.getByText('R$ 1.200,00 · 30%')).toBeVisible()
+  await expect(page.getByText('R$ 2.800,00').first()).toBeVisible()
+
+  // Marcar a parcela do mês como paga libera R$ 100,00.
+  await page.getByRole('link', { name: 'A pagar', exact: true }).click()
+  await page.getByRole('button', { name: 'Marcar como paga' }).click()
+  await expect(page.getByText('Parcela marcada como paga.')).toBeVisible()
+  expect(limite()).toMatchObject({ usado_centavos: 110000, disponivel_centavos: 290000 })
+  await page.getByRole('link', { name: 'Início', exact: true }).click()
+  await expect(page.getByText('R$ 1.100,00 · 28%')).toBeVisible()
+
+  // Alterar o valor recalcula: o que a conta já ocupa volta antes de comparar.
+  await page.getByRole('link', { name: 'A pagar', exact: true }).click()
+  await page.getByRole('link', { name: 'Notebook' }).click()
+  await expect(page.getByText('Limite disponível hoje: R$ 2.900,00')).toBeVisible()
+  await expect(page.getByText('Esta conta comprometerá: R$ 1.100,00')).toBeVisible()
+  await digitarValor(page, 'Valor da parcela (R$)', '12000')
+  await expect(page.getByText('Esta conta comprometerá: R$ 1.320,00')).toBeVisible()
+  await expect(page.getByText('Disponível após salvar: R$ 2.680,00')).toBeVisible()
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page.getByText('Conta a pagar atualizada.')).toBeVisible()
+  expect(limite()?.usado_centavos).toBe(132000)
+
+  // Excluir devolve todo o limite.
+  await page.getByRole('link', { name: 'Notebook' }).click()
+  await page.getByRole('button', { name: 'Excluir conta a pagar' }).click()
+  await page.getByRole('button', { name: 'Excluir', exact: true }).click()
+  await expect(page.getByText('Conta excluída de todos os meses.')).toBeVisible()
+  await expect.poll(() => limite()?.usado_centavos).toBe(0)
+  expect(limite()?.disponivel_centavos).toBe(400000)
+})
+
+test('conta a pagar acima do limite do cartão só salva com confirmação', async ({
+  page,
+  banco,
+}) => {
+  const usuario = await usuarioLogado(page, banco)
+  const cartao = banco.inserir(usuario.id, 'cartoes', {
+    nome: 'Visa',
+    limite_centavos: 100000,
+    dia_fechamento: 5,
+    dia_vencimento: 12,
+  })
+
+  await page.goto('/contas-a-pagar/nova')
+  await page.getByLabel('Nome').fill('Sofá')
+  await digitarValor(page, 'Valor da parcela (R$)', '10000')
+  await page.getByLabel('Dia do venc.').fill('10')
+  await page.getByLabel('Total de parcelas').fill('12')
+  await page.getByRole('button', { name: 'Cartão de crédito' }).click()
+  await expect(page.getByText(/^Disponível após lançamento: .R\$ 200,00$/)).toBeVisible()
+  await expect(page.getByText('Esta conta passa do limite disponível (R$ 1.000,00)')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Salvar conta a pagar' }).click()
+  await expect(page.getByText('Confirme que quer salvar a conta acima do limite.')).toBeVisible()
+  expect(banco.linhas('dividas', usuario.id)).toHaveLength(0)
+
+  await page.getByLabel('Salvar mesmo assim').check()
+  await page.getByRole('button', { name: 'Salvar conta a pagar' }).click()
+  await expect(page.getByText('Conta a pagar salva.')).toBeVisible()
+  expect(banco.linhas('dividas', usuario.id)[0]).toMatchObject({
+    forma_pagamento: 'cartao',
+    cartao_id: cartao.id,
+    conta_id: null,
+  })
+  expect(banco.limiteCartao(usuario.id, cartao.id)).toMatchObject({
+    usado_centavos: 120000,
+    disponivel_centavos: -20000,
+  })
 })

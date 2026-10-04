@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  type ContaAPagarNoCartao,
+  type LancamentoLimite,
+  comprometidoPorContasAPagar,
+  disponivelDepoisDaConta,
   excessoNoLimite,
   faturaQueVenceNoMes,
   fechamentoFatura,
@@ -176,5 +180,105 @@ describe('limite do cartão', () => {
     expect(excessoNoLimite(30000, 45000)).toBe(15000)
     expect(excessoNoLimite(30000, 45000, 20000)).toBe(0)
     expect(excessoNoLimite(-5000, 1000)).toBe(6000)
+  })
+})
+
+describe('contas a pagar no cartão comprometem o limite', () => {
+  const NUBANK = 'nubank'
+  const VISA = 'visa'
+  const HOJE = '2026-10'
+  const semCompras: LancamentoLimite[] = []
+  const nenhumaPaga = new Set<string>()
+
+  function conta(parcial: Partial<ContaAPagarNoCartao> = {}): ContaAPagarNoCartao {
+    return {
+      infinita: false,
+      totalParcelas: 12,
+      parcelasJaPagas: 0,
+      mesInicioRef: HOJE,
+      diaVencimento: 15,
+      valorParcelaCentavos: 10000,
+      ativa: true,
+      formaPagamento: 'cartao',
+      cartaoId: NUBANK,
+      excluida: false,
+      mesesPagos: [],
+      ...parcial,
+    }
+  }
+
+  function limiteNubank(
+    contas: ContaAPagarNoCartao[],
+    compras: LancamentoLimite[] = semCompras,
+    pagas: ReadonlySet<string> = nenhumaPaga,
+  ) {
+    return limiteCartao(400000, compras, pagas, comprometidoPorContasAPagar(NUBANK, contas, HOJE))
+  }
+
+  it('A: limite 400000 e conta de 120000 → usado 120000, disponível 280000', () => {
+    expect(limiteNubank([conta()])).toEqual({
+      limiteCentavos: 400000,
+      usadoCentavos: 120000,
+      disponivelCentavos: 280000,
+      percentual: 30,
+    })
+  })
+
+  it('B: depois de pagar uma parcela de 10000 → usado 110000, disponível 290000', () => {
+    expect(limiteNubank([conta({ mesesPagos: ['2026-10'] })])).toMatchObject({
+      usadoCentavos: 110000,
+      disponivelCentavos: 290000,
+    })
+  })
+
+  it('C: excluir a conta restante → usado 0, disponível 400000 (desfazer volta)', () => {
+    const paga = conta({ mesesPagos: ['2026-10'] })
+    expect(limiteNubank([{ ...paga, excluida: true }])).toMatchObject({
+      usadoCentavos: 0,
+      disponivelCentavos: 400000,
+    })
+    expect(limiteNubank([{ ...paga, excluida: false }]).usadoCentavos).toBe(110000)
+  })
+
+  it('D: duas contas no mesmo cartão somam', () => {
+    const celular = conta({ totalParcelas: 6, valorParcelaCentavos: 5000 })
+    expect(limiteNubank([conta(), celular])).toMatchObject({
+      usadoCentavos: 150000,
+      disponivelCentavos: 250000,
+    })
+  })
+
+  it('E: contas de cartões diferentes nunca se misturam', () => {
+    const contas = [conta(), conta({ cartaoId: VISA, totalParcelas: 3 })]
+    expect(comprometidoPorContasAPagar(NUBANK, contas, HOJE)).toBe(120000)
+    expect(comprometidoPorContasAPagar(VISA, contas, HOJE)).toBe(30000)
+    // Conta paga na carteira nunca entra no limite, mesmo com um cartão antigo gravado.
+    expect(comprometidoPorContasAPagar(NUBANK, [conta({ formaPagamento: 'conta' })], HOJE)).toBe(0)
+  })
+
+  it('F: compra parcelada — a fatura do mês é diferente do limite comprometido', () => {
+    const compra = gerarParcelas(120000, '2026-10-05', 12).map((p) => ({
+      valorCentavos: p.valorCentavos,
+      faturaMesRef: mesFatura(p.data, 10),
+    }))
+    const faturaDeOutubro = compra
+      .filter((p) => p.faturaMesRef === '2026-10')
+      .reduce((s, p) => s + p.valorCentavos, 0)
+    expect(faturaDeOutubro).toBe(10000)
+    expect(limiteNubank([], compra).usadoCentavos).toBe(120000)
+    // Fatura de outubro paga: só ela sai do limite.
+    expect(limiteNubank([], compra, new Set(['2026-10'])).usadoCentavos).toBe(110000)
+  })
+
+  it('compra e conta a pagar no mesmo cartão somam sem contar nada duas vezes', () => {
+    const compra = [{ valorCentavos: 30000, faturaMesRef: '2026-11' }]
+    expect(limiteNubank([conta({ mesesPagos: ['2026-10'] })], compra).usadoCentavos).toBe(140000)
+  })
+
+  it('formulário: disponível depois da conta (nova e editada no mesmo cartão)', () => {
+    expect(disponivelDepoisDaConta(400000, 120000)).toBe(280000)
+    // Editar de 120000 para 150000 no mesmo cartão: só a diferença sai do disponível.
+    expect(disponivelDepoisDaConta(280000, 150000, 120000)).toBe(250000)
+    expect(disponivelDepoisDaConta(10000, 30000)).toBe(-20000)
   })
 })

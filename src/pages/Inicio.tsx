@@ -488,11 +488,12 @@ function Cartoes() {
                   />
                   {f.nome}
                 </span>
-                <span className="valor mt-1 block text-xl font-semibold">
-                  {formatar(f.total_centavos)}
+                <span className="mt-1 flex items-baseline justify-between gap-2">
+                  <span className="text-sm text-secundario">Fatura:</span>{' '}
+                  <span className="valor text-xl font-semibold">{formatar(f.total_centavos)}</span>
                 </span>
                 <span className="mt-0.5 block text-xs text-secundario">
-                  Fatura · vence dia {diaDe(f.data_vencimento)}
+                  Vence dia {diaDe(f.data_vencimento)}
                   {f.status === 'paga' && ' · paga'}
                 </span>
               </span>
