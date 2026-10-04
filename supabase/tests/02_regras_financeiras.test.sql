@@ -19,7 +19,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(87);
+select plan(91);
 
 -- Auxiliares ------------------------------------------------------------------
 
@@ -612,6 +612,15 @@ select results_eq(
   'A: conta a pagar de 12 × 100,00 no cartão compromete 1.200,00 na hora'
 );
 
+-- 2) Sem nenhum pagamento, o comprometimento não muda, nem com meses passando.
+select set_config('app.hoje', '2027-01-10', true);
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
+  120000::bigint,
+  '2: sem pagar nenhuma parcela, o usado continua 120000 (mesmo três meses depois)'
+);
+select set_config('app.hoje', '2026-10-03', true);
+
 -- B) Pagar a parcela de outubro libera exatamente 10000.
 insert into public.dividas_pagamentos (divida_id, mes_ref)
 values ('e0000000-0000-4000-8000-0000000000d1', '2026-10');
@@ -620,6 +629,17 @@ select results_eq(
     from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')$$,
   $$values (110000::bigint, 290000::bigint)$$,
   'B: pagar uma parcela de 100,00 libera 100,00 do limite'
+);
+
+-- 7) A parcela paga vai para a fatura, mas não volta a contar no limite.
+select results_eq(
+  $$select l.usado_centavos,
+           (select sum(p.valor_centavos)::bigint from public.dividas_pagamentos p
+             where p.divida_id = 'e0000000-0000-4000-8000-0000000000d1'),
+           public.total_fatura('e0000000-0000-4000-8000-0000000000c1', '2026-11')
+    from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1') l$$,
+  $$values (110000::bigint, 10000::bigint, 10000::bigint)$$,
+  '7: a parcela paga (10000) está na fatura e fora do limite; o usado é só o saldo devedor, sem dupla contagem'
 );
 
 -- F) Fatura e limite são métricas diferentes.
@@ -714,6 +734,30 @@ select is(
   (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c1')),
   90000::bigint,
   'desfazer a exclusão volta a comprometer o saldo devedor'
+);
+
+-- E) Editar a conta de 1.200,00 para 1.500,00 e depois quitar tudo (cartão Elo).
+insert into public.cartoes (id, nome, limite_centavos, dia_fechamento, dia_vencimento)
+values ('e0000000-0000-4000-8000-0000000000c3', 'Elo', 400000, 10, 20);
+insert into public.dividas (id, nome, valor_parcela_centavos, dia_vencimento, total_parcelas,
+                            forma_pagamento, cartao_id)
+values ('e0000000-0000-4000-8000-0000000000d4', 'Geladeira', 10000, 15, 12,
+        'cartao', 'e0000000-0000-4000-8000-0000000000c3');
+update public.dividas set valor_parcela_centavos = 12500
+ where id = 'e0000000-0000-4000-8000-0000000000d4';
+select is(
+  (select usado_centavos from public.limite_cartao('e0000000-0000-4000-8000-0000000000c3')),
+  150000::bigint,
+  'E: editar a conta de 1.200,00 para 1.500,00 (12 × 125,00) faz o usado refletir 1.500,00'
+);
+insert into public.dividas_pagamentos (divida_id, mes_ref)
+select 'e0000000-0000-4000-8000-0000000000d4', public.mes_add('2026-10', n)
+from generate_series(0, 11) as n;
+select results_eq(
+  $$select usado_centavos, disponivel_centavos
+    from public.limite_cartao('e0000000-0000-4000-8000-0000000000c3')$$,
+  $$values (0::bigint, 400000::bigint)$$,
+  'quitar todas as parcelas devolve todo o limite (usado 0, disponível 400000)'
 );
 
 select * from finish();

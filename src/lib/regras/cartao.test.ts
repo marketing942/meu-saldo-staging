@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { mesAdd } from '@/lib/datas'
+
 import {
   type ContaAPagarNoCartao,
   type LancamentoLimite,
@@ -280,5 +282,36 @@ describe('contas a pagar no cartão comprometem o limite', () => {
     // Editar de 120000 para 150000 no mesmo cartão: só a diferença sai do disponível.
     expect(disponivelDepoisDaConta(280000, 150000, 120000)).toBe(250000)
     expect(disponivelDepoisDaConta(10000, 30000)).toBe(-20000)
+  })
+
+  it('2: sem pagamentos, o usado continua 120000 mesmo com meses passando', () => {
+    for (const mes of ['2026-10', '2026-11', '2027-01', '2027-09']) {
+      expect(comprometidoPorContasAPagar(NUBANK, [conta()], mes)).toBe(120000)
+    }
+  })
+
+  it('E: editar a conta de 1.200,00 para 1.500,00 reflete 1.500,00 no usado', () => {
+    expect(limiteNubank([conta({ valorParcelaCentavos: 12500 })])).toMatchObject({
+      usadoCentavos: 150000,
+      disponivelCentavos: 250000,
+    })
+  })
+
+  it('quitar todas as parcelas devolve todo o limite', () => {
+    const meses = Array.from({ length: 12 }, (_, i) => mesAdd(HOJE, i))
+    expect(limiteNubank([conta({ mesesPagos: meses })])).toMatchObject({
+      usadoCentavos: 0,
+      disponivelCentavos: 400000,
+    })
+  })
+
+  it('7: a parcela paga vai para a fatura, mas não volta a contar no limite', () => {
+    // A fatura soma a parcela paga (10000); o limite só recebe compras (gastos)
+    // e o saldo devedor da conta, que já não tem essa parcela.
+    const paga = conta({ mesesPagos: ['2026-10'] })
+    const faturaComAParcela = 10000
+    expect(faturaComAParcela).toBe(paga.valorParcelaCentavos)
+    expect(limiteNubank([paga]).usadoCentavos).toBe(110000)
+    expect(limiteNubank([paga]).usadoCentavos).not.toBe(110000 + faturaComAParcela)
   })
 })

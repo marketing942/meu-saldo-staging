@@ -12,6 +12,9 @@ Use antes de cada publicação. Os passos detalhados estão no [README](../READM
 ## 2. Supabase (em cada projeto: staging e produção)
 
 - [ ] Migrations aplicadas (`npx supabase db push`) e tabelas com "RLS enabled".
+- [ ] `npx supabase migration list`: **todas** as migrations de `supabase/migrations/` aparecem em _Local_ e
+      em _Remote_. O app lê os cálculos (saldo, fatura, limite do cartão) das funções do banco: um front novo
+      com uma migration faltando mostra números da regra antiga sem dar erro.
 - [ ] Edge Function publicada: `npx supabase functions deploy excluir-conta --project-ref <ref>`.
 - [ ] Authentication › Email habilitado; senha mínima de 6 caracteres.
 - [ ] Authentication › URL Configuration: _Site URL_ e _Redirect URLs_ com o domínio do ambiente e `/**`
@@ -34,6 +37,7 @@ Use antes de cada publicação. Os passos detalhados estão no [README](../READM
 - [ ] Criar conta → primeiro acesso → Início com "Olá, nome".
 - [ ] Lançar um gasto no Pix, uma receita e uma compra parcelada no cartão; conferir saldo, Gastos (e Receitas) e a fatura.
 - [ ] Conferir o limite do cartão (usado e disponível) no Início, na tela do cartão e no formulário de gasto; marcar a fatura como paga e ver o limite voltar.
+- [ ] Criar uma conta a pagar de 12 × R$ 100 no cartão: o "Usado" do cartão no Início sobe R$ 1.200 **na hora**, sem marcar nada como pago; marcar uma parcela como paga baixa para R$ 1.100.
 - [ ] Cadastrar uma conta a pagar e marcar a parcela do mês como paga.
 - [ ] Definir a previsão de desnecessários em Metas; ver o progresso lá e o alerta no Início.
 - [ ] Recarregar a página (a sessão continua) e Sair.
